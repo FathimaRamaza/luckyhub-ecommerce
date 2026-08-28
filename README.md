@@ -1,50 +1,132 @@
-# Welcome to your Expo app 👋
+# Lucky Hub E-Commerce Mobile Application
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+A full-stack mobile e-commerce and printing service application developed for **Lucky Hub**, a stationery and printing business.
 
-## Get started
+The application allows customers to browse stationery products, manage their cart and wishlist, apply coupons and offers, calculate delivery charges, place orders, track orders, and submit printing requests.
 
-1. Install dependencies
+## Technologies
 
-   ```bash
-   npm install
-   ```
+### Mobile Application
+- React Native
+- Expo
+- TypeScript
+- Expo Router
 
-2. Start the app
+### Backend
+- Supabase
+- PostgreSQL
+- Supabase Authentication
+- Supabase Storage
+- Row Level Security (RLS)
 
-   ```bash
-   npx expo start
-   ```
+### Notifications
+- Expo Notifications
 
-In the output, you'll find options to open the app in a
+## Main Features
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+- User Registration and Login
+- Persistent User Sessions
+- Product Categories
+- Product Search
+- Product Details
+- Product Variants
+- Colour Variants
+- Weight Variants
+- Page Variants
+- Wishlist
+- Shopping Cart
+- Flash Deals
+- Discount Coupons
+- Coupon Usage Tracking
+- Delivery Charge Calculation
+- Store Pickup
+- Checkout
+- Cash on Delivery
+- Order Creation
+- Order History
+- Order Details
+- Order Tracking
+- Order Status Notifications
+- Saved Addresses
+- User Profile
+- Printing Service
+- Printing File Upload
+- Printing Request History
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+## Delivery Areas
 
-## Get a fresh project
+Currently configured delivery areas:
 
-When you're ready, run:
+- Nintavur — LKR 150
+- Kalmunai — LKR 200
+- Store Pickup — Free
 
-```bash
-npm run reset-project
-```
+Delivery areas and charges are stored in the backend and can be updated dynamically.
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+## Coupon System
 
-## Learn more
+The application supports configurable coupons with:
 
-To learn more about developing your project with Expo, look at the following resources:
+- Percentage discounts
+- Minimum order amount
+- Maximum discount
+- Expiry dates
+- Usage limits
+- Coupon redemption tracking
+- Free delivery coupons
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+Example:
 
-## Join the community
+`LUCKY10` — 10% discount on eligible orders.
 
-Join our community of developers creating universal apps.
+## Flash Deals
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+Products can have time-based promotional offers.
+
+The mobile application automatically displays:
+
+- Original price
+- Offer price
+- Discount percentage
+- Active flash deals
+
+## Order Tracking
+
+Customers can view order progress through stages such as:
+
+1. Order Confirmed
+2. Processing
+3. Shipped
+4. Out for Delivery
+5. Delivered
+
+Local notifications are also generated when order statuses change.
+
+## Printing Service
+
+Customers can upload documents and submit printing requests through the application.
+
+Printing functionality includes:
+
+- File selection
+- File upload
+- Printing request creation
+- Request history
+- Printing status tracking
+
+## Application Architecture
+
+```text
+Customer
+   |
+   v
+React Native Mobile App
+   |
+   v
+Supabase
+   |
+   +-- PostgreSQL Database
+   +-- Authentication
+   +-- Storage
+   +-- Row Level Security
+   +-- Business Data
