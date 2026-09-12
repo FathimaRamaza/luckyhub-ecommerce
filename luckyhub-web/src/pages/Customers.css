@@ -1,0 +1,884 @@
+/* =========================================
+   PAGE
+========================================= */
+
+.customers-page {
+  width: 100%;
+
+  font-family:
+    "Segoe UI",
+    Arial,
+    sans-serif;
+
+  color: #17221f;
+}
+
+
+/* =========================================
+   HEADER
+========================================= */
+
+.customers-page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 24px;
+
+  margin-bottom: 20px;
+}
+
+.customers-page-header h1 {
+  margin: 0;
+
+  color: #172033;
+
+  font-size: 29px;
+  font-weight: 700;
+}
+
+.customers-page-header p {
+  margin: 6px 0 0;
+
+  color: #758781;
+
+  font-size: 14px;
+}
+
+.customers-header-actions {
+  display: flex;
+  align-items: center;
+
+  gap: 10px;
+}
+
+
+/* =========================================
+   SEARCH
+========================================= */
+
+.customers-search {
+  width: 310px;
+  height: 44px;
+
+  display: flex;
+  align-items: center;
+
+  gap: 9px;
+
+  padding: 0 12px;
+
+  border:
+    1px solid #d9e5e1;
+
+  border-radius: 9px;
+
+  background: #ffffff;
+
+  color: #688078;
+}
+
+.customers-search input {
+  min-width: 0;
+
+  flex: 1;
+
+  border: none;
+  outline: none;
+
+  background: transparent;
+
+  color: #263934;
+
+  font-family:
+    "Segoe UI",
+    Arial,
+    sans-serif;
+
+  font-size: 13px;
+}
+
+.customers-search input::placeholder {
+  color: #8b9b96;
+}
+
+.customers-search > span {
+  padding: 4px 7px;
+
+  border-radius: 6px;
+
+  background: #f0f4f3;
+
+  color: #8b9995;
+
+  font-size: 10px;
+
+  white-space: nowrap;
+}
+
+
+/* =========================================
+   BUTTONS
+========================================= */
+
+.customers-refresh-button,
+.customers-export-button {
+  height: 44px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  gap: 7px;
+
+  padding: 0 15px;
+
+  border-radius: 9px;
+
+  background: #ffffff;
+
+  font-family:
+    "Segoe UI",
+    Arial,
+    sans-serif;
+
+  font-size: 12px;
+  font-weight: 600;
+
+  cursor: pointer;
+}
+
+.customers-refresh-button {
+  border:
+    1px solid #d5e1dd;
+
+  color: #00695c;
+}
+
+.customers-export-button {
+  border:
+    1px solid #62b6a8;
+
+  color: #087a6b;
+}
+
+.customers-refresh-button:hover,
+.customers-export-button:hover {
+  background: #f3f9f7;
+}
+
+.customers-spin {
+  animation:
+    customers-spin
+    0.8s
+    linear infinite;
+}
+
+@keyframes customers-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+
+/* =========================================
+   ERROR
+========================================= */
+
+.customers-error {
+  margin-bottom: 16px;
+
+  padding: 12px 14px;
+
+  border:
+    1px solid #ffd6b1;
+
+  border-radius: 9px;
+
+  background: #fff8f0;
+
+  color: #b9630b;
+
+  font-size: 12.5px;
+}
+
+
+/* =========================================
+   SUMMARY
+========================================= */
+
+.customers-summary-grid {
+  display: grid;
+
+  grid-template-columns:
+    repeat(
+      4,
+      minmax(0, 1fr)
+    );
+
+  gap: 16px;
+
+  margin-bottom: 20px;
+}
+
+.customer-summary-card {
+  min-height: 122px;
+
+  display: flex;
+  align-items: center;
+
+  gap: 15px;
+
+  padding: 19px;
+
+  border:
+    1px solid #dfe8e5;
+
+  border-radius: 14px;
+
+  background: #ffffff;
+
+  box-shadow:
+    0 2px 8px
+    rgba(25, 65, 55, 0.035);
+}
+
+.customer-summary-icon {
+  width: 52px;
+  height: 52px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  flex-shrink: 0;
+
+  border-radius: 12px;
+}
+
+.customer-summary-icon-purple {
+  background: #f0e7ff;
+
+  color: #7c3aed;
+}
+
+.customer-summary-icon-green {
+  background: #dcf8ed;
+
+  color: #05a76e;
+}
+
+.customer-summary-icon-blue {
+  background: #e7efff;
+
+  color: #3e6dde;
+}
+
+.customer-summary-icon-orange {
+  background: #fff0dc;
+
+  color: #e7820a;
+}
+
+.customer-summary-content {
+  min-width: 0;
+}
+
+.customer-summary-content > span {
+  display: block;
+
+  color: #697b75;
+
+  font-size: 13px;
+}
+
+.customer-summary-content > strong {
+  display: block;
+
+  margin-top: 5px;
+
+  color: #172033;
+
+  font-size: 28px;
+  line-height: 1.05;
+
+  font-weight: 700;
+}
+
+.customer-summary-content > small {
+  display: block;
+
+  margin-top: 8px;
+
+  color: #7c8d87;
+
+  font-size: 10.5px;
+}
+
+
+/* =========================================
+   FILTERS
+========================================= */
+
+.customers-filter-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  margin-bottom: 16px;
+}
+
+.customers-filters {
+  display: flex;
+  align-items: center;
+
+  gap: 10px;
+}
+
+.customers-select {
+  position: relative;
+
+  min-width: 205px;
+}
+
+.customers-select select {
+  width: 100%;
+  height: 42px;
+
+  appearance: none;
+
+  padding:
+    0
+    38px
+    0
+    13px;
+
+  border:
+    1px solid #d8e3df;
+
+  border-radius: 8px;
+
+  outline: none;
+
+  background: #ffffff;
+
+  color: #536963;
+
+  font-family:
+    "Segoe UI",
+    Arial,
+    sans-serif;
+
+  font-size: 12.5px;
+
+  cursor: pointer;
+}
+
+.customers-select svg {
+  position: absolute;
+
+  top: 50%;
+  right: 12px;
+
+  transform:
+    translateY(-50%);
+
+  color: #55716a;
+
+  pointer-events: none;
+}
+
+
+/* =========================================
+   TABLE
+========================================= */
+
+.customers-table-card {
+  overflow: hidden;
+
+  border:
+    1px solid #dfe8e5;
+
+  border-radius: 13px;
+
+  background: #ffffff;
+
+  box-shadow:
+    0 3px 10px
+    rgba(24, 60, 52, 0.03);
+}
+
+.customers-table-wrapper {
+  overflow-x: auto;
+}
+
+.customers-table {
+  width: 100%;
+
+  border-collapse: collapse;
+
+  font-family:
+    "Segoe UI",
+    Arial,
+    sans-serif;
+}
+
+.customers-table thead {
+  background: #f4f8f6;
+}
+
+.customers-table th {
+  height: 48px;
+
+  padding: 0 15px;
+
+  text-align: left;
+
+  color: #3e574f;
+
+  font-size: 12px;
+  font-weight: 600;
+
+  white-space: nowrap;
+}
+
+.customers-table td {
+  min-height: 70px;
+
+  padding: 12px 15px;
+
+  border-top:
+    1px solid #e9efed;
+
+  color: #536963;
+
+  font-size: 12.5px;
+
+  vertical-align: middle;
+}
+
+.customers-table tbody tr:hover {
+  background: #fbfdfc;
+}
+
+
+/* =========================================
+   MAIN CUSTOMER
+========================================= */
+
+.customer-main-cell {
+  min-width: 185px;
+
+  display: flex;
+  align-items: center;
+
+  gap: 11px;
+}
+
+.customer-profile-avatar {
+  width: 40px;
+  height: 40px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  flex-shrink: 0;
+
+  border-radius: 50%;
+
+  background:
+    linear-gradient(
+      135deg,
+      #00695c,
+      #009688
+    );
+
+  color: #ffffff;
+
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.customer-main-cell > div:last-child {
+  display: flex;
+  flex-direction: column;
+
+  gap: 2px;
+}
+
+.customer-main-cell strong {
+  color: #21362f;
+
+  font-size: 12.5px;
+  font-weight: 650;
+
+  white-space: nowrap;
+}
+
+.customer-main-cell span {
+  color: #899994;
+
+  font-size: 10px;
+}
+
+
+/* =========================================
+   CONTACT
+========================================= */
+
+.customer-contact {
+  min-width: 185px;
+
+  display: flex;
+  flex-direction: column;
+
+  gap: 4px;
+}
+
+.customer-contact > span {
+  display: flex;
+  align-items: center;
+
+  gap: 5px;
+
+  max-width: 190px;
+
+  overflow: hidden;
+
+  color: #526963;
+
+  font-size: 11px;
+
+  text-overflow: ellipsis;
+
+  white-space: nowrap;
+}
+
+.customer-contact > small {
+  color: #899994;
+
+  font-size: 10px;
+}
+
+
+/* =========================================
+   ORDER COUNT
+========================================= */
+
+.customer-order-count {
+  min-width: 29px;
+  height: 29px;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: 0 8px;
+
+  border-radius: 7px;
+
+  background: #edf6f3;
+
+  color: #00695c;
+
+  font-size: 11px;
+  font-weight: 650;
+}
+
+
+/* =========================================
+   SPENT
+========================================= */
+
+.customer-spent {
+  color: #19352d !important;
+
+  font-size: 12.5px !important;
+  font-weight: 700 !important;
+
+  white-space: nowrap;
+}
+
+
+/* =========================================
+   DATE
+========================================= */
+
+.customer-date {
+  color: #63766f !important;
+
+  font-size: 11.5px !important;
+
+  white-space: nowrap;
+}
+
+
+/* =========================================
+   STATUS
+========================================= */
+
+.customer-status {
+  min-height: 29px;
+
+  display: inline-flex;
+  align-items: center;
+
+  gap: 6px;
+
+  padding: 0 10px;
+
+  border-radius: 7px;
+
+  font-size: 10.5px;
+  font-weight: 550;
+
+  white-space: nowrap;
+}
+
+.customer-status > span {
+  width: 6px;
+  height: 6px;
+
+  border-radius: 50%;
+
+  background: currentColor;
+}
+
+.customer-status-active {
+  background: #ddf7e9;
+
+  color: #0a8d5a;
+}
+
+.customer-status-inactive {
+  background: #f0f2f1;
+
+  color: #75847f;
+}
+
+
+/* =========================================
+   ACTIONS
+========================================= */
+
+.customer-row-actions {
+  display: flex;
+  align-items: center;
+
+  gap: 7px;
+}
+
+.customer-row-actions button {
+  min-height: 34px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  gap: 5px;
+
+  border:
+    1px solid #d5e3df;
+
+  border-radius: 7px;
+
+  background: #ffffff;
+
+  color: #08786b;
+
+  font-family:
+    "Segoe UI",
+    Arial,
+    sans-serif;
+
+  font-size: 10.5px;
+  font-weight: 600;
+
+  cursor: pointer;
+}
+
+.customer-view-button {
+  padding: 0 10px;
+}
+
+.customer-more-button {
+  width: 34px;
+
+  padding: 0;
+}
+
+.customer-row-actions button:hover {
+  background: #edf7f4;
+}
+
+
+/* =========================================
+   EMPTY
+========================================= */
+
+.customers-empty {
+  height: 210px;
+
+  text-align: center;
+
+  color: #899993 !important;
+
+  font-size: 13px !important;
+}
+
+
+/* =========================================
+   FOOTER
+========================================= */
+
+.customers-table-footer {
+  min-height: 60px;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 20px;
+
+  padding: 10px 15px;
+
+  border-top:
+    1px solid #e6edeb;
+}
+
+.customers-table-footer > span {
+  color: #748781;
+
+  font-size: 11.5px;
+}
+
+
+/* =========================================
+   PAGINATION
+========================================= */
+
+.customers-pagination {
+  display: flex;
+  align-items: center;
+
+  gap: 5px;
+}
+
+.customers-pagination button {
+  min-width: 32px;
+  height: 32px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border: none;
+
+  border-radius: 7px;
+
+  background: transparent;
+
+  color: #4f6660;
+
+  font-family:
+    "Segoe UI",
+    Arial,
+    sans-serif;
+
+  font-size: 11px;
+  font-weight: 600;
+
+  cursor: pointer;
+}
+
+.customers-pagination button:hover:not(:disabled) {
+  background: #edf6f3;
+}
+
+.customers-pagination button.active {
+  background: #00796b;
+
+  color: #ffffff;
+}
+
+.customers-pagination button:disabled {
+  opacity: 0.35;
+
+  cursor: not-allowed;
+}
+
+
+/* =========================================
+   RESPONSIVE
+========================================= */
+
+@media (max-width: 1200px) {
+
+  .customers-summary-grid {
+    grid-template-columns:
+      repeat(2, 1fr);
+  }
+}
+
+
+@media (max-width: 950px) {
+
+  .customers-page-header {
+    align-items: flex-start;
+
+    flex-direction: column;
+  }
+
+  .customers-header-actions {
+    width: 100%;
+
+    flex-wrap: wrap;
+  }
+
+  .customers-search {
+    flex: 1;
+
+    width: auto;
+  }
+}
+
+
+@media (max-width: 700px) {
+
+  .customers-page-header h1 {
+    font-size: 25px;
+  }
+
+  .customers-summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .customers-header-actions {
+    align-items: stretch;
+
+    flex-direction: column;
+  }
+
+  .customers-search,
+  .customers-refresh-button,
+  .customers-export-button {
+    width: 100%;
+  }
+
+  .customers-filters {
+    width: 100%;
+
+    flex-direction: column;
+  }
+
+  .customers-select {
+    width: 100%;
+  }
+
+  .customers-table-footer {
+    align-items: flex-start;
+
+    flex-direction: column;
+  }
+}
