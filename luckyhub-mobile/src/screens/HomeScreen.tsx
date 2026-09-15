@@ -3,6 +3,7 @@ import { useRouter } from 'expo-router';
 import {
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 
@@ -46,12 +47,33 @@ import {
   ProductOffer,
 } from '../services/offerService';
 
+import {
+  getActiveHomeBanners,
+  HomeBanner,
+} from '../services/bannerService';
+
 
 const SCREEN_WIDTH =
   Dimensions.get('window').width;
 
 const CATEGORY_WIDTH =
   (SCREEN_WIDTH - 32) / 3;
+
+const BANNER_HORIZONTAL_MARGIN = 16;
+
+const BANNER_GAP = 10;
+
+const BANNER_WIDTH =
+  SCREEN_WIDTH -
+  BANNER_HORIZONTAL_MARGIN * 2;
+
+const BANNER_SLIDE_WIDTH =
+  BANNER_WIDTH + BANNER_GAP;
+
+const BANNER_HEIGHT =
+  BANNER_WIDTH / 1.75;
+
+const BANNER_AUTO_SLIDE_MS = 4000;
 
 
 // ======================================================
@@ -389,6 +411,24 @@ export default function HomeScreen() {
 
 
   const [
+    banners,
+    setBanners,
+  ] =
+    useState<HomeBanner[]>([]);
+
+
+  const [
+    activeBannerIndex,
+    setActiveBannerIndex,
+  ] =
+    useState(0);
+
+
+  const bannerScrollRef =
+    useRef<ScrollView | null>(null);
+
+
+  const [
     offers,
     setOffers,
   ] =
@@ -448,11 +488,23 @@ export default function HomeScreen() {
           productData,
           categoryData,
           offerData,
+          bannerData,
         ] =
           await Promise.all([
             getActiveProducts(),
             getCategories(),
             getActiveOffers(),
+            getActiveHomeBanners()
+              .catch(
+                bannerError => {
+                  console.log(
+                    'Home banner load error:',
+                    bannerError
+                  );
+
+                  return [];
+                }
+              ),
           ]);
 
 
@@ -468,6 +520,16 @@ export default function HomeScreen() {
 
         setOffers(
           offerData
+        );
+
+
+        setBanners(
+          bannerData
+        );
+
+
+        setActiveBannerIndex(
+          0
         );
 
 
@@ -507,6 +569,61 @@ export default function HomeScreen() {
 
     },
     []
+  );
+
+
+  // ====================================================
+  // HOME BANNER AUTO SLIDE
+  // ====================================================
+
+  useEffect(
+    () => {
+
+      if (
+        banners.length <= 1
+      ) {
+        return;
+      }
+
+
+      const interval =
+        setInterval(
+          () => {
+
+            setActiveBannerIndex(
+              currentIndex => {
+
+                const nextIndex =
+                  (currentIndex + 1) %
+                  banners.length;
+
+
+                bannerScrollRef.current
+                  ?.scrollTo({
+                    x:
+                      nextIndex *
+                      BANNER_SLIDE_WIDTH,
+                    animated: true,
+                  });
+
+
+                return nextIndex;
+              }
+            );
+          },
+          BANNER_AUTO_SLIDE_MS
+        );
+
+
+      return () =>
+        clearInterval(
+          interval
+        );
+
+    },
+    [
+      banners.length,
+    ]
   );
 
 
@@ -705,6 +822,126 @@ export default function HomeScreen() {
 
 
   // ====================================================
+  // OPEN HOME BANNER TARGET
+  // ====================================================
+
+  const openBanner =
+    (
+      banner: HomeBanner
+    ) => {
+
+      if (
+        banner.target_type ===
+          'product' &&
+        banner.target_value
+      ) {
+        router.push({
+          pathname:
+            '/product-details',
+          params: {
+            id:
+              banner.target_value,
+          },
+        });
+
+        return;
+      }
+
+
+      if (
+        banner.target_type ===
+          'category' &&
+        banner.target_value
+      ) {
+        const category =
+          categories.find(
+            item =>
+              item.id ===
+              banner.target_value
+          );
+
+
+        router.push({
+          pathname:
+            '/(tabs)/categories',
+          params: {
+            categoryId:
+              banner.target_value,
+            categoryName:
+              category?.name ??
+              '',
+          },
+        });
+
+        return;
+      }
+
+
+      if (
+        banner.target_type ===
+          'search'
+      ) {
+        router.push({
+          pathname:
+            '/search',
+          params: {
+            query:
+              banner.target_value ??
+              '',
+          },
+        });
+
+        return;
+      }
+
+
+      if (
+        banner.target_type ===
+          'sale'
+      ) {
+        router.push(
+          '/search'
+        );
+      }
+    };
+
+
+  // ====================================================
+  // BANNER SWIPE POSITION
+  // ====================================================
+
+  const handleBannerScrollEnd =
+    (event: any) => {
+
+      const x =
+        event.nativeEvent
+          .contentOffset.x;
+
+
+      const nextIndex =
+        Math.round(
+          x /
+            BANNER_SLIDE_WIDTH
+        );
+
+
+      const safeIndex =
+        Math.max(
+          0,
+          Math.min(
+            nextIndex,
+            banners.length - 1
+          )
+        );
+
+
+      setActiveBannerIndex(
+        safeIndex
+      );
+    };
+
+
+  // ====================================================
   // SCREEN
   // ====================================================
 
@@ -878,89 +1115,80 @@ export default function HomeScreen() {
 
 
         {/* ================================================
-            SALE BANNER
+            DYNAMIC PROMOTION BANNERS
         ================================================ */}
 
-        <View
-          style={
-            styles.saleBanner
-          }
-        >
-
-          <View
-            style={
-              styles.saleLeft
-            }
-          >
-
-            <Text
-              style={
-                styles.bigSale
+        {banners.length > 0 && (
+          <>
+            <ScrollView
+              ref={
+                bannerScrollRef
+              }
+              horizontal
+              showsHorizontalScrollIndicator={
+                false
+              }
+              decelerationRate="fast"
+              snapToInterval={
+                BANNER_SLIDE_WIDTH
+              }
+              snapToAlignment="start"
+              disableIntervalMomentum
+              contentContainerStyle={
+                styles.bannerCarouselContent
+              }
+              onMomentumScrollEnd={
+                handleBannerScrollEnd
               }
             >
-              BIG SALE
-            </Text>
-
-
-            <Text
-              style={
-                styles.upTo
-              }
-            >
-              LUCKY HUB
-            </Text>
-
-
-            <Text
-              style={
-                styles.discount
-              }
-            >
-              SPECIAL DEALS
-            </Text>
-
-
-            <Pressable
-              style={
-                styles.shopNowButton
-              }
-              onPress={() =>
-                router.push(
-                  '/search'
+              {banners.map(
+                banner => (
+                  <HomeBannerCard
+                    key={
+                      banner.id
+                    }
+                    banner={
+                      banner
+                    }
+                    onPress={() =>
+                      openBanner(
+                        banner
+                      )
+                    }
+                  />
                 )
-              }
-            >
+              )}
+            </ScrollView>
 
-              <Text
+
+            {banners.length > 1 && (
+              <View
                 style={
-                  styles.shopNowText
+                  styles.bannerDots
                 }
               >
-                SHOP NOW
-              </Text>
-
-            </Pressable>
-
-          </View>
-
-
-          <View
-            style={
-              styles.saleRight
-            }
-          >
-
-            <Ionicons
-              name="bag-handle"
-              size={82}
-              color={
-                COLORS.secondary
-              }
-            />
-
-          </View>
-
-        </View>
+                {banners.map(
+                  (
+                    banner,
+                    index
+                  ) => (
+                    <View
+                      key={
+                        `banner-dot-${banner.id}`
+                      }
+                      style={[
+                        styles.bannerDot,
+                        index ===
+                          activeBannerIndex &&
+                          styles.bannerDotActive,
+                      ]}
+                    />
+                  )
+                )}
+              </View>
+            )}
+          </>
+        )}
 
 
         {/* ================================================
@@ -1575,6 +1803,184 @@ export default function HomeScreen() {
 
 
 // ======================================================
+// HOME PROMOTION BANNER CARD
+// ======================================================
+
+function HomeBannerCard({
+  banner,
+  onPress,
+}: {
+  banner: HomeBanner;
+  onPress: () => void;
+}) {
+
+  const [imageLoaded, setImageLoaded] =
+    useState(false);
+
+  const [imageFailed, setImageFailed] =
+    useState(false);
+
+  const hasAction =
+    banner.target_type !==
+    'none';
+
+  const imageUri =
+    banner.image_url
+      ? `${banner.image_url.trim()}${
+          banner.image_url.includes('?')
+            ? '&'
+            : '?'
+        }v=${encodeURIComponent(
+          banner.updated_at || banner.id
+        )}`
+      : null;
+
+  const fallbackContent = (
+    <View
+      style={
+        styles.bannerOverlay
+      }
+    >
+      <View
+        style={
+          styles.bannerTextArea
+        }
+      >
+        {banner.discount_text ? (
+          <Text
+            style={
+              styles.bannerOfferText
+            }
+            numberOfLines={1}
+          >
+            {banner.discount_text}
+          </Text>
+        ) : null}
+
+        <Text
+          style={
+            styles.bannerTitle
+          }
+          numberOfLines={2}
+        >
+          {banner.title}
+        </Text>
+
+        {banner.subtitle ? (
+          <Text
+            style={
+              styles.bannerSubtitle
+            }
+            numberOfLines={2}
+          >
+            {banner.subtitle}
+          </Text>
+        ) : null}
+
+        {hasAction && (
+          <View
+            style={
+              styles.bannerButton
+            }
+          >
+            <Text
+              style={
+                styles.bannerButtonText
+              }
+            >
+              {banner.button_text ||
+                'SHOP NOW'}
+            </Text>
+
+            <Ionicons
+              name="arrow-forward"
+              size={15}
+              color={
+                COLORS.textPrimary
+              }
+            />
+          </View>
+        )}
+      </View>
+    </View>
+  );
+
+  return (
+    <Pressable
+      style={
+        styles.bannerSlide
+      }
+      onPress={
+        hasAction
+          ? onPress
+          : undefined
+      }
+      disabled={!hasAction}
+    >
+      <View
+        style={
+          styles.bannerImageContainer
+        }
+      >
+        {fallbackContent}
+
+        {imageUri &&
+          !imageFailed && (
+          <Image
+            key={imageUri}
+            source={{
+              uri: imageUri,
+            }}
+            style={
+              styles.bannerRemoteImage
+            }
+            resizeMode="cover"
+            fadeDuration={0}
+            onLoadStart={() => {
+              setImageLoaded(false);
+              setImageFailed(false);
+            }}
+            onLoad={() => {
+              setImageLoaded(true);
+              setImageFailed(false);
+            }}
+            onError={(event) => {
+              setImageLoaded(false);
+              setImageFailed(true);
+
+              console.log(
+                'Promotion banner image error:',
+                imageUri,
+                event.nativeEvent.error
+              );
+            }}
+          />
+        )}
+
+        {imageUri &&
+          !imageLoaded &&
+          !imageFailed && (
+          <View
+            pointerEvents="none"
+            style={
+              styles.bannerLoadingBadge
+            }
+          >
+            <ActivityIndicator
+              size="small"
+              color={
+                COLORS.secondary
+              }
+            />
+          </View>
+        )}
+      </View>
+    </Pressable>
+  );
+}
+
+
+// ======================================================
 // SECTION TITLE
 // ======================================================
 
@@ -2080,110 +2486,189 @@ const styles =
 
 
     // ====================================================
-    // SALE
+    // HOME PROMOTION BANNERS
     // ====================================================
 
-    saleBanner: {
-      marginHorizontal: 16,
+    bannerCarouselContent: {
+      paddingHorizontal:
+        BANNER_HORIZONTAL_MARGIN,
+      paddingTop: 2,
+    },
 
-      backgroundColor:
-        COLORS.primary,
 
+    bannerSlide: {
+      width:
+        BANNER_WIDTH,
+      marginRight:
+        BANNER_GAP,
       borderRadius: 18,
-
-      minHeight: 175,
-
-      padding: 20,
-
-      flexDirection:
-        'row',
-
       overflow:
         'hidden',
+      backgroundColor:
+        COLORS.primary,
     },
 
 
-    saleLeft: {
-      flex: 1,
-
+    bannerBackground: {
+      width:
+        '100%',
+      height:
+        BANNER_HEIGHT,
       justifyContent:
         'center',
     },
 
 
-    saleRight: {
-      width: 105,
+    bannerImageContainer: {
+      width:
+        '100%',
+      height:
+        BANNER_HEIGHT,
+      position:
+        'relative',
+      overflow:
+        'hidden',
+      backgroundColor:
+        COLORS.primary,
+    },
 
-      justifyContent:
-        'center',
 
+    bannerRemoteImage: {
+      ...StyleSheet.absoluteFillObject,
+      width:
+        '100%',
+      height:
+        '100%',
+      backgroundColor:
+        COLORS.primary,
+    },
+
+
+    bannerLoadingBadge: {
+      position:
+        'absolute',
+      right: 12,
+      bottom: 12,
+      width: 30,
+      height: 30,
+      borderRadius: 15,
       alignItems:
         'center',
-    },
-
-
-    bigSale: {
-      color:
-        COLORS.white,
-
-      fontSize: 27,
-
-      fontWeight:
-        '900',
-    },
-
-
-    upTo: {
-      color:
-        COLORS.white,
-
-      fontSize: 12,
-
-      fontWeight:
-        '700',
-
-      marginTop: 3,
-    },
-
-
-    discount: {
-      color:
-        COLORS.secondary,
-
-      fontSize: 22,
-
-      fontWeight:
-        '900',
-
-      marginTop: 2,
-    },
-
-
-    shopNowButton: {
-      marginTop: 12,
-
+      justifyContent:
+        'center',
       backgroundColor:
-        COLORS.secondary,
+        'rgba(0, 55, 49, 0.75)',
+    },
 
-      paddingVertical: 8,
 
-      paddingHorizontal: 15,
+    bannerFallback: {
+      backgroundColor:
+        COLORS.primary,
+    },
 
-      borderRadius: 8,
 
-      alignSelf:
+    bannerOverlay: {
+      height:
+        BANNER_HEIGHT,
+      justifyContent:
+        'center',
+      padding: 20,
+      backgroundColor:
+        'rgba(0, 55, 49, 0.28)',
+    },
+
+
+    bannerTextArea: {
+      maxWidth:
+        '68%',
+      alignItems:
         'flex-start',
     },
 
 
-    shopNowText: {
-      fontSize: 12,
-
+    bannerOfferText: {
+      color:
+        COLORS.secondary,
+      fontSize: 13,
       fontWeight:
-        '800',
+        '900',
+      marginBottom: 4,
+      textTransform:
+        'uppercase',
+    },
 
+
+    bannerTitle: {
+      color:
+        COLORS.white,
+      fontSize: 27,
+      lineHeight: 30,
+      fontWeight:
+        '900',
+    },
+
+
+    bannerSubtitle: {
+      marginTop: 5,
+      color:
+        COLORS.white,
+      fontSize: 12.5,
+      lineHeight: 17,
+      fontWeight:
+        '600',
+    },
+
+
+    bannerButton: {
+      marginTop: 13,
+      minHeight: 34,
+      flexDirection:
+        'row',
+      alignItems:
+        'center',
+      gap: 6,
+      paddingHorizontal: 14,
+      borderRadius: 8,
+      backgroundColor:
+        COLORS.secondary,
+    },
+
+
+    bannerButtonText: {
       color:
         COLORS.textPrimary,
+      fontSize: 11.5,
+      fontWeight:
+        '900',
+    },
+
+
+    bannerDots: {
+      minHeight: 22,
+      flexDirection:
+        'row',
+      alignItems:
+        'center',
+      justifyContent:
+        'center',
+      gap: 6,
+      paddingTop: 8,
+    },
+
+
+    bannerDot: {
+      width: 7,
+      height: 7,
+      borderRadius: 999,
+      backgroundColor:
+        COLORS.border,
+    },
+
+
+    bannerDotActive: {
+      width: 20,
+      backgroundColor:
+        COLORS.primary,
     },
 
 

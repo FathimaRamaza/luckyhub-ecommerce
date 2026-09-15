@@ -191,6 +191,60 @@ export default function CartScreen() {
 
 
   // ======================================================
+  // PRODUCT MARKDOWN SAVINGS
+  // compare_at_price -> original price
+  // base/variant price -> current normal selling price
+  // ======================================================
+
+  const productMarkdownSavings =
+    useMemo(
+      () =>
+        items.reduce(
+          (
+            total,
+            item
+          ) => {
+            const product =
+              item.products as any;
+
+            if (!product) {
+              return total;
+            }
+
+            const compareAtPrice =
+              Number(
+                product.compare_at_price ??
+                  0
+              );
+
+            const normalPrice =
+              getCartItemNormalPrice(
+                item
+              );
+
+            if (
+              compareAtPrice >
+              normalPrice
+            ) {
+              return (
+                total +
+                (
+                  compareAtPrice -
+                  normalPrice
+                ) *
+                  item.quantity
+              );
+            }
+
+            return total;
+          },
+          0
+        ),
+      [items]
+    );
+
+
+  // ======================================================
   // RECALCULATE APPLIED COUPON WHEN CART CHANGES
   // ======================================================
 
@@ -1292,6 +1346,34 @@ export default function CartScreen() {
           </View>
 
 
+          {productMarkdownSavings > 0 && (
+            <View
+              style={
+                styles.summaryRow
+              }
+            >
+
+              <Text
+                style={
+                  styles.summaryLabel
+                }
+              >
+                Product Discount Savings
+              </Text>
+
+              <Text
+                style={
+                  styles.savingsValue
+                }
+              >
+                - Rs.{' '}
+                {productMarkdownSavings.toLocaleString()}
+              </Text>
+
+            </View>
+          )}
+
+
           {totalSavings > 0 && (
             <View
               style={
@@ -1588,6 +1670,53 @@ function CartProductCard({
       : 0;
 
 
+  const compareAtPrice =
+    Number(
+      (product as any)
+        .compare_at_price ??
+        0
+    );
+
+
+  const hasProductDiscount =
+    compareAtPrice >
+    normalPrice;
+
+
+  const productDiscountPercentage =
+    hasProductDiscount
+      ? Math.round(
+          (
+            (
+              compareAtPrice -
+              normalPrice
+            ) /
+            compareAtPrice
+          ) *
+            100
+        )
+      : 0;
+
+
+  const hasDisplayedDiscount =
+    hasOffer ||
+    hasProductDiscount;
+
+
+  const displayedOldPrice =
+    hasOffer
+      ? normalPrice
+      : hasProductDiscount
+        ? compareAtPrice
+        : 0;
+
+
+  const displayedDiscountPercentage =
+    hasOffer
+      ? offerPercentage
+      : productDiscountPercentage;
+
+
   const itemTotal =
     price *
     item.quantity;
@@ -1760,7 +1889,7 @@ function CartProductCard({
           </Text>
 
 
-          {hasOffer && (
+          {hasDisplayedDiscount && (
 
             <Text
               style={
@@ -1768,13 +1897,13 @@ function CartProductCard({
               }
             >
               Rs.{' '}
-              {normalPrice.toLocaleString()}
+              {displayedOldPrice.toLocaleString()}
             </Text>
 
           )}
 
 
-          {hasOffer && (
+          {hasDisplayedDiscount && (
 
             <View
               style={
@@ -1787,7 +1916,7 @@ function CartProductCard({
                   styles.offerBadgeText
                 }
               >
-                {offerPercentage}% OFF
+                {displayedDiscountPercentage}% OFF
               </Text>
 
             </View>

@@ -19,6 +19,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { COLORS } from '../constants/colors';
 import { supabase } from '../lib/supabase';
 
+const EMAIL_REDIRECT_URL =
+  'luckyhubmobile://auth/callback';
+
 export default function SignupScreen() {
   const router = useRouter();
 
@@ -77,6 +80,17 @@ export default function SignupScreen() {
       return;
     }
 
+    const emailPattern =
+      /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+    if (!emailPattern.test(cleanEmail)) {
+      Alert.alert(
+        'Invalid Email',
+        'Please enter a valid email address.'
+      );
+      return;
+    }
+
     if (password.length < 6) {
       Alert.alert(
         'Password Too Short',
@@ -102,6 +116,9 @@ export default function SignupScreen() {
           password,
 
           options: {
+            emailRedirectTo:
+              EMAIL_REDIRECT_URL,
+
             data: {
               full_name: cleanName,
               phone: cleanPhone,
@@ -117,36 +134,36 @@ export default function SignupScreen() {
         return;
       }
 
+      /*
+       * If email confirmation is disabled,
+       * Supabase may immediately create
+       * a session.
+       */
       if (data.session) {
-        Alert.alert(
-          'Account Created',
-          'Your Lucky Hub account has been created successfully.',
-          [
-            {
-              text: 'Continue',
-              onPress: () =>
-                router.replace(
-                  '/(tabs)/home'
-                ),
-            },
-          ]
+        router.replace(
+          '/(tabs)/home'
         );
 
         return;
       }
 
-      Alert.alert(
-        'Check Your Email',
-        'Your account was created. Please check your email and confirm your account before logging in.',
-        [
-          {
-            text: 'OK',
-            onPress: () =>
-              router.replace('/login'),
-          },
-        ]
-      );
+      /*
+       * Email confirmation is enabled.
+       * Send customer to our dedicated
+       * verification screen.
+       */
+      router.replace({
+        pathname: '/check-email',
+        params: {
+          email: cleanEmail,
+        },
+      });
     } catch (error) {
+      console.error(
+        'Signup error:',
+        error
+      );
+
       Alert.alert(
         'Signup Failed',
         'Something went wrong. Please try again.'
@@ -187,7 +204,11 @@ export default function SignupScreen() {
             />
           </Pressable>
 
-          <View style={styles.logoContainer}>
+          <View
+            style={
+              styles.logoContainer
+            }
+          >
             <Image
               source={require('../assets/logos/luckyhub-logo.png')}
               style={styles.logo}
@@ -199,7 +220,9 @@ export default function SignupScreen() {
             Create Account
           </Text>
 
-          <Text style={styles.subtitle}>
+          <Text
+            style={styles.subtitle}
+          >
             Create your Lucky Hub customer
             account
           </Text>
@@ -209,17 +232,25 @@ export default function SignupScreen() {
               Full Name
             </Text>
 
-            <View style={styles.inputContainer}>
+            <View
+              style={
+                styles.inputContainer
+              }
+            >
               <Ionicons
                 name="person-outline"
                 size={20}
-                color={COLORS.textSecondary}
+                color={
+                  COLORS.textSecondary
+                }
               />
 
               <TextInput
                 style={styles.input}
                 value={fullName}
-                onChangeText={setFullName}
+                onChangeText={
+                  setFullName
+                }
                 placeholder="Enter your full name"
                 placeholderTextColor={
                   COLORS.textSecondary
@@ -231,17 +262,25 @@ export default function SignupScreen() {
               Mobile Number
             </Text>
 
-            <View style={styles.inputContainer}>
+            <View
+              style={
+                styles.inputContainer
+              }
+            >
               <Ionicons
                 name="call-outline"
                 size={20}
-                color={COLORS.textSecondary}
+                color={
+                  COLORS.textSecondary
+                }
               />
 
               <TextInput
                 style={styles.input}
                 value={phone}
-                onChangeText={setPhone}
+                onChangeText={
+                  setPhone
+                }
                 placeholder="Enter mobile number"
                 placeholderTextColor={
                   COLORS.textSecondary
@@ -254,11 +293,17 @@ export default function SignupScreen() {
               Email Address
             </Text>
 
-            <View style={styles.inputContainer}>
+            <View
+              style={
+                styles.inputContainer
+              }
+            >
               <Ionicons
                 name="mail-outline"
                 size={20}
-                color={COLORS.textSecondary}
+                color={
+                  COLORS.textSecondary
+                }
               />
 
               <TextInput
@@ -279,22 +324,32 @@ export default function SignupScreen() {
               Password
             </Text>
 
-            <View style={styles.inputContainer}>
+            <View
+              style={
+                styles.inputContainer
+              }
+            >
               <Ionicons
                 name="lock-closed-outline"
                 size={20}
-                color={COLORS.textSecondary}
+                color={
+                  COLORS.textSecondary
+                }
               />
 
               <TextInput
                 style={styles.input}
                 value={password}
-                onChangeText={setPassword}
+                onChangeText={
+                  setPassword
+                }
                 placeholder="Create password"
                 placeholderTextColor={
                   COLORS.textSecondary
                 }
-                secureTextEntry={!showPassword}
+                secureTextEntry={
+                  !showPassword
+                }
                 autoCapitalize="none"
               />
 
@@ -312,7 +367,9 @@ export default function SignupScreen() {
                       : 'eye-outline'
                   }
                   size={21}
-                  color={COLORS.textSecondary}
+                  color={
+                    COLORS.textSecondary
+                  }
                 />
               </Pressable>
             </View>
@@ -321,16 +378,24 @@ export default function SignupScreen() {
               Confirm Password
             </Text>
 
-            <View style={styles.inputContainer}>
+            <View
+              style={
+                styles.inputContainer
+              }
+            >
               <Ionicons
                 name="shield-checkmark-outline"
                 size={20}
-                color={COLORS.textSecondary}
+                color={
+                  COLORS.textSecondary
+                }
               />
 
               <TextInput
                 style={styles.input}
-                value={confirmPassword}
+                value={
+                  confirmPassword
+                }
                 onChangeText={
                   setConfirmPassword
                 }
@@ -338,7 +403,9 @@ export default function SignupScreen() {
                 placeholderTextColor={
                   COLORS.textSecondary
                 }
-                secureTextEntry={!showPassword}
+                secureTextEntry={
+                  !showPassword
+                }
                 autoCapitalize="none"
               />
             </View>
@@ -367,20 +434,28 @@ export default function SignupScreen() {
               )}
             </Pressable>
 
-            <View style={styles.loginRow}>
+            <View
+              style={styles.loginRow}
+            >
               <Text
-                style={styles.loginQuestion}
+                style={
+                  styles.loginQuestion
+                }
               >
                 Already have an account?
               </Text>
 
               <Pressable
                 onPress={() =>
-                  router.replace('/login')
+                  router.replace(
+                    '/login'
+                  )
                 }
               >
                 <Text
-                  style={styles.loginText}
+                  style={
+                    styles.loginText
+                  }
                 >
                   Login
                 </Text>

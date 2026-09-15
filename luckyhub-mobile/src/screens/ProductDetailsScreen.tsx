@@ -398,6 +398,40 @@ export default function ProductDetailsScreen() {
 
 
   // ====================================================
+  // PRODUCT-LEVEL DISCOUNT
+  // Uses products.compare_at_price dynamically.
+  // Active offers take priority when present.
+  // ====================================================
+
+  const compareAtPrice =
+    product?.compare_at_price === null ||
+    product?.compare_at_price === undefined
+      ? null
+      : Number(
+          product.compare_at_price
+        );
+
+
+  const hasProductDiscount =
+    !hasActiveOffer &&
+    compareAtPrice !== null &&
+    compareAtPrice >
+      currentNormalPrice;
+
+
+  const productDiscountPercentage =
+    hasProductDiscount &&
+    compareAtPrice
+      ? Math.round(
+          ((compareAtPrice -
+            currentNormalPrice) /
+            compareAtPrice) *
+            100
+        )
+      : 0;
+
+
+  // ====================================================
   // CURRENT STOCK
   // ====================================================
 
@@ -1110,19 +1144,26 @@ export default function ProductDetailsScreen() {
                   </Text>
                 </View>
               </>
-            ) : product.compare_at_price &&
-              Number(
-                product.compare_at_price
-              ) >
-                currentPrice ? (
-              <Text
-                style={styles.oldPrice}
-              >
-                Rs.{' '}
-                {Number(
-                  product.compare_at_price
-                ).toLocaleString()}
-              </Text>
+            ) : hasProductDiscount &&
+              compareAtPrice !== null ? (
+              <>
+                <Text
+                  style={styles.oldPrice}
+                >
+                  Rs.{' '}
+                  {compareAtPrice.toLocaleString()}
+                </Text>
+
+                <View
+                  style={styles.offerBadge}
+                >
+                  <Text
+                    style={styles.offerBadgeText}
+                  >
+                    {productDiscountPercentage}% OFF
+                  </Text>
+                </View>
+              </>
             ) : null}
           </View>
 

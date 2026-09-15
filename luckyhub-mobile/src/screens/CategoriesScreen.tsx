@@ -847,6 +847,32 @@ function ProductCard({
           '../assets/placeholders/product-placeholder.png'
         );
 
+  const sellingPrice =
+    Number(
+      product.base_price ?? 0
+    );
+
+  const comparePrice =
+    product.compare_at_price === null ||
+    product.compare_at_price === undefined
+      ? null
+      : Number(
+          product.compare_at_price
+        );
+
+  const hasDiscount =
+    comparePrice !== null &&
+    comparePrice > sellingPrice;
+
+  const discountPercentage =
+    hasDiscount && comparePrice
+      ? Math.round(
+          ((comparePrice - sellingPrice) /
+            comparePrice) *
+            100
+        )
+      : 0;
+
   return (
     <Pressable
       style={
@@ -870,6 +896,22 @@ function ProductCard({
           }
           resizeMode="contain"
         />
+
+        {hasDiscount && (
+          <View
+            style={
+              styles.discountBadge
+            }
+          >
+            <Text
+              style={
+                styles.discountBadgeText
+              }
+            >
+              {discountPercentage}% OFF
+            </Text>
+          </View>
+        )}
       </View>
 
       {product.brand ? (
@@ -902,14 +944,31 @@ function ProductCard({
         </Text>
       ) : null}
 
-      <Text
+      <View
         style={
-          styles.price
+          styles.priceRow
         }
       >
-        Rs.{' '}
-        {product.base_price.toLocaleString()}
-      </Text>
+        <Text
+          style={
+            styles.price
+          }
+        >
+          Rs.{' '}
+          {sellingPrice.toLocaleString()}
+        </Text>
+
+        {hasDiscount && comparePrice !== null && (
+          <Text
+            style={
+              styles.oldPrice
+            }
+          >
+            Rs.{' '}
+            {comparePrice.toLocaleString()}
+          </Text>
+        )}
+      </View>
 
       <Text
         style={
@@ -1154,6 +1213,7 @@ const styles =
         'hidden',
       backgroundColor:
         COLORS.backgroundSoft,
+      position: 'relative',
     },
 
     productImage: {
@@ -1161,6 +1221,24 @@ const styles =
         '100%',
       height:
         '100%',
+    },
+
+    discountBadge: {
+      position: 'absolute',
+      top: 8,
+      left: 8,
+      backgroundColor:
+        COLORS.secondary,
+      borderRadius: 6,
+      paddingHorizontal: 7,
+      paddingVertical: 4,
+    },
+
+    discountBadgeText: {
+      fontSize: 9,
+      fontWeight: '900',
+      color:
+        COLORS.textPrimary,
     },
 
     brand: {
@@ -1189,13 +1267,28 @@ const styles =
         COLORS.textSecondary,
     },
 
-    price: {
+    priceRow: {
       marginTop: 7,
+      flexDirection: 'row',
+      alignItems: 'center',
+      flexWrap: 'wrap',
+      gap: 6,
+    },
+
+    price: {
       fontSize: 16,
       fontWeight:
         '900',
       color:
         COLORS.primary,
+    },
+
+    oldPrice: {
+      fontSize: 10,
+      color:
+        COLORS.textSecondary,
+      textDecorationLine:
+        'line-through',
     },
 
     stock: {

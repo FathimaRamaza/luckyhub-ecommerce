@@ -2,7 +2,6 @@ import { Stack } from 'expo-router';
 
 import NotificationBootstrap from '../src/components/NotificationBootstrap';
 
-
 export default function RootLayout() {
   return (
     <>
@@ -11,7 +10,6 @@ export default function RootLayout() {
       ================================================== */}
 
       <NotificationBootstrap />
-
 
       {/* ==================================================
           APP ROUTES
@@ -32,6 +30,14 @@ export default function RootLayout() {
 
         <Stack.Screen
           name="signup"
+        />
+
+        <Stack.Screen
+          name="check-email"
+        />
+
+        <Stack.Screen
+          name="auth/callback"
         />
 
         <Stack.Screen

@@ -31,6 +31,25 @@ import {
     Product,
 } from '../services/productService';
 
+
+// ======================================================
+// PRODUCT CATEGORY NAME
+// ======================================================
+
+function getProductCategoryName(product: Product): string {
+  const category = product.categories;
+
+  if (!category) {
+    return '';
+  }
+
+  if (Array.isArray(category)) {
+    return category[0]?.name ?? '';
+  }
+
+  return category.name ?? '';
+}
+
 import {
     getWishlistProducts,
     removeFromWishlist,
@@ -592,6 +611,40 @@ export default function WishlistScreen() {
                 workingProductId ===
                 product.id;
 
+              const sellingPrice =
+                Number(
+                  product.base_price ??
+                    0
+                );
+
+              const compareAtPrice =
+                product.compare_at_price ===
+                  null ||
+                product.compare_at_price ===
+                  undefined
+                  ? 0
+                  : Number(
+                      product.compare_at_price
+                    );
+
+              const hasDiscount =
+                compareAtPrice >
+                sellingPrice;
+
+              const discountPercentage =
+                hasDiscount
+                  ? Math.round(
+                      (
+                        (
+                          compareAtPrice -
+                          sellingPrice
+                        ) /
+                        compareAtPrice
+                      ) *
+                        100
+                    )
+                  : 0;
+
               return (
                 <View
                   key={
@@ -632,18 +685,13 @@ export default function WishlistScreen() {
                         styles.productInfo
                       }
                     >
-                      {product.categories
-                        ?.name ? (
+                      {getProductCategoryName(product) ? (
                         <Text
                           style={
                             styles.category
                           }
                         >
-                          {
-                            product
-                              .categories
-                              .name
-                          }
+                          {getProductCategoryName(product)}
                         </Text>
                       ) : null}
 
@@ -672,17 +720,47 @@ export default function WishlistScreen() {
                         </Text>
                       ) : null}
 
-                      <Text
+                      <View
                         style={
-                          styles.price
+                          styles.priceRow
                         }
                       >
-                        Rs.{' '}
-                        {Number(
-                          product.base_price ??
-                            0
-                        ).toLocaleString()}
-                      </Text>
+                        <Text
+                          style={
+                            styles.price
+                          }
+                        >
+                          Rs.{' '}
+                          {sellingPrice.toLocaleString()}
+                        </Text>
+
+                        {hasDiscount && (
+                          <>
+                            <Text
+                              style={
+                                styles.oldPrice
+                              }
+                            >
+                              Rs.{' '}
+                              {compareAtPrice.toLocaleString()}
+                            </Text>
+
+                            <View
+                              style={
+                                styles.discountBadge
+                              }
+                            >
+                              <Text
+                                style={
+                                  styles.discountBadgeText
+                                }
+                              >
+                                {discountPercentage}% OFF
+                              </Text>
+                            </View>
+                          </>
+                        )}
+                      </View>
 
                       <Text
                         style={[
@@ -992,13 +1070,47 @@ const styles =
         COLORS.textSecondary,
     },
 
-    price: {
+    priceRow: {
       marginTop: 8,
+      flexDirection:
+        'row',
+      alignItems:
+        'center',
+      flexWrap:
+        'wrap',
+      gap: 6,
+    },
+
+    price: {
       fontSize: 17,
       fontWeight:
         '900',
       color:
         COLORS.primary,
+    },
+
+    oldPrice: {
+      fontSize: 11,
+      color:
+        COLORS.textSecondary,
+      textDecorationLine:
+        'line-through',
+    },
+
+    discountBadge: {
+      paddingHorizontal: 6,
+      paddingVertical: 3,
+      borderRadius: 6,
+      backgroundColor:
+        '#FEF3C7',
+    },
+
+    discountBadgeText: {
+      fontSize: 8,
+      fontWeight:
+        '900',
+      color:
+        '#92400E',
     },
 
     stockText: {

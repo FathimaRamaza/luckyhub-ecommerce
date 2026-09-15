@@ -20,6 +20,25 @@ import {
   Product,
 } from '../services/productService';
 
+
+// ======================================================
+// PRODUCT CATEGORY NAME
+// ======================================================
+
+function getProductCategoryName(product: Product): string {
+  const category = product.categories;
+
+  if (!category) {
+    return '';
+  }
+
+  if (Array.isArray(category)) {
+    return category[0]?.name ?? '';
+  }
+
+  return category.name ?? '';
+}
+
 export default function SearchScreen() {
   const router = useRouter();
 
@@ -87,7 +106,7 @@ export default function SearchScreen() {
       const sku = product.sku?.toLowerCase() ?? '';
       const brand = product.brand?.toLowerCase() ?? '';
       const category =
-        product.categories?.name?.toLowerCase() ?? '';
+        getProductCategoryName(product).toLowerCase();
 
       return (
         name.includes(query) ||
@@ -122,6 +141,32 @@ export default function SearchScreen() {
       ? { uri: item.image_url }
       : require('../assets/placeholders/product-placeholder.png');
 
+    const sellingPrice =
+      Number(
+        item.base_price ?? 0
+      );
+
+    const comparePrice =
+      item.compare_at_price === null ||
+      item.compare_at_price === undefined
+        ? null
+        : Number(
+            item.compare_at_price
+          );
+
+    const hasDiscount =
+      comparePrice !== null &&
+      comparePrice > sellingPrice;
+
+    const discountPercentage =
+      hasDiscount && comparePrice
+        ? Math.round(
+            ((comparePrice - sellingPrice) /
+              comparePrice) *
+              100
+          )
+        : 0;
+
     return (
       <Pressable
         style={styles.productCard}
@@ -133,6 +178,14 @@ export default function SearchScreen() {
             style={styles.productImage}
             resizeMode="contain"
           />
+
+          {hasDiscount && (
+            <View style={styles.discountBadge}>
+              <Text style={styles.discountBadgeText}>
+                {discountPercentage}% OFF
+              </Text>
+            </View>
+          )}
 
           {item.stock_quantity <= 0 && (
             <View style={styles.outOfStockBadge}>
@@ -164,9 +217,17 @@ export default function SearchScreen() {
           ) : null}
 
           <View style={styles.bottomRow}>
-            <Text style={styles.price}>
-              Rs. {item.base_price.toLocaleString()}
-            </Text>
+            <View style={styles.priceRow}>
+              <Text style={styles.price}>
+                Rs. {sellingPrice.toLocaleString()}
+              </Text>
+
+              {hasDiscount && comparePrice !== null && (
+                <Text style={styles.oldPrice}>
+                  Rs. {comparePrice.toLocaleString()}
+                </Text>
+              )}
+            </View>
 
             <View style={styles.stockBox}>
               <Text style={styles.stockText}>
@@ -471,6 +532,22 @@ const styles = StyleSheet.create({
     height: '100%',
   },
 
+  discountBadge: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    backgroundColor: COLORS.secondary,
+    paddingHorizontal: 7,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+
+  discountBadgeText: {
+    color: COLORS.textPrimary,
+    fontSize: 9,
+    fontWeight: '900',
+  },
+
   outOfStockBadge: {
     position: 'absolute',
     bottom: 8,
@@ -516,10 +593,23 @@ const styles = StyleSheet.create({
     marginTop: 9,
   },
 
+  priceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+
   price: {
     fontSize: 16,
     fontWeight: '800',
     color: COLORS.primary,
+  },
+
+  oldPrice: {
+    fontSize: 10,
+    color: COLORS.textSecondary,
+    textDecorationLine: 'line-through',
   },
 
   stockBox: {
