@@ -3,7 +3,6 @@ import * as Linking from 'expo-linking';
 import { useRouter } from 'expo-router';
 import {
   useEffect,
-  useRef,
   useState,
 } from 'react';
 import {
@@ -17,55 +16,15 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { COLORS } from '../../src/constants/colors';
 import { supabase } from '../../src/lib/supabase';
+import { AuthCallbackError, createAuthCallbackProcessor, getAuthCallbackDiagnostics } from '../../src/lib/authCallback';
+import { useAuth } from '../../src/contexts/AuthContext';
 
 type CallbackStatus =
   | 'loading'
   | 'success'
   | 'error';
 
-function getUrlParams(url: string) {
-  const queryPart =
-    url.includes('?')
-      ? url
-          .split('?')[1]
-          ?.split('#')[0] ?? ''
-      : '';
-
-  const hashPart =
-    url.includes('#')
-      ? url.split('#')[1] ?? ''
-      : '';
-
-  const combined =
-    [queryPart, hashPart]
-      .filter(Boolean)
-      .join('&');
-
-  const params =
-    new URLSearchParams(combined);
-
-  return {
-    accessToken:
-      params.get('access_token'),
-
-    refreshToken:
-      params.get('refresh_token'),
-
-    code:
-      params.get('code'),
-
-    error:
-      params.get('error'),
-
-    errorCode:
-      params.get('error_code'),
-
-    errorDescription:
-      params.get(
-        'error_description'
-      ),
-  };
-}
+const processCallback = createAuthCallbackProcessor(supabase);
 
 export default function AuthCallbackPage() {
   const router = useRouter();
@@ -73,8 +32,7 @@ export default function AuthCallbackPage() {
   const incomingUrl =
     Linking.useLinkingURL();
 
-  const processedUrlRef =
-    useRef<string | null>(null);
+  const { refreshSession, setRecovering } = useAuth();
 
   const [status, setStatus] =
     useState<CallbackStatus>(
@@ -87,147 +45,46 @@ export default function AuthCallbackPage() {
     );
 
   useEffect(() => {
+    let active = true;
+    let timer: ReturnType<typeof setTimeout> | undefined;
     const handleCallback = async () => {
-      if (!incomingUrl) {
-        return;
-      }
-
-      if (
-        processedUrlRef.current ===
-        incomingUrl
-      ) {
-        return;
-      }
-
-      processedUrlRef.current =
-        incomingUrl;
-
       try {
+        const url = incomingUrl ?? await Linking.getInitialURL();
+        if (!active) return;
+        if (__DEV__) console.info('Auth callback metadata:', getAuthCallbackDiagnostics(url ?? ''));
+        if (!url) throw new Error('No email link was found. Please open the link from your email.');
         setStatus('loading');
-        setMessage(
-          'Verifying your Lucky Hub account...'
-        );
-
-        const {
-          accessToken,
-          refreshToken,
-          code,
-          error,
-          errorCode,
-          errorDescription,
-        } = getUrlParams(
-          incomingUrl
-        );
-
-        if (
-          error ||
-          errorCode ||
-          errorDescription
-        ) {
-          throw new Error(
-            errorDescription ||
-              error ||
-              errorCode ||
-              'Email verification failed.'
-          );
+        setMessage('Checking your Lucky Hub email link...');
+        // Keep private screens unavailable until the link is verified by Supabase.
+        setRecovering(true);
+        const result = await processCallback(url);
+        if (!active) return;
+        const validated = await refreshSession();
+        if (!active) return;
+        if (!validated || validated.user.id !== result.session.user.id) {
+          throw new Error('Unable to validate this session. Please request a new email link.');
         }
-
-        /*
-         * Supabase implicit auth flow.
-         * Confirmation link normally
-         * redirects with access_token
-         * and refresh_token.
-         */
-        if (
-          accessToken &&
-          refreshToken
-        ) {
-          const {
-            error: sessionError,
-          } =
-            await supabase.auth.setSession(
-              {
-                access_token:
-                  accessToken,
-
-                refresh_token:
-                  refreshToken,
-              }
-            );
-
-          if (sessionError) {
-            throw sessionError;
-          }
-        } else if (code) {
-          /*
-           * Also support PKCE/code flow
-           * if the project uses it later.
-           */
-          const {
-            error: exchangeError,
-          } =
-            await supabase.auth
-              .exchangeCodeForSession(
-                code
-              );
-
-          if (exchangeError) {
-            throw exchangeError;
-          }
-        }
-
-        const {
-          data: {
-            session,
-          },
-          error: sessionCheckError,
-        } =
-          await supabase.auth
-            .getSession();
-
-        if (sessionCheckError) {
-          throw sessionCheckError;
-        }
-
-        if (!session) {
-          setStatus('success');
-
-          setMessage(
-            'Your email has been verified successfully. Please login to continue.'
-          );
-
+        setRecovering(result.recovery);
+        if (result.recovery) {
+          router.replace('/reset-password');
           return;
         }
-
         setStatus('success');
-
-        setMessage(
-          'Your email has been verified successfully.'
-        );
-
-        setTimeout(() => {
-          router.replace(
-            '/(tabs)/home'
-          );
-        }, 1200);
+        setMessage('Your email has been verified successfully.');
+        timer = setTimeout(() => router.replace('/(tabs)/home'), 1200);
       } catch (error) {
-        console.error(
-          'Auth callback error:',
-          error
-        );
-
-        const errorMessage =
-          error instanceof Error
-            ? error.message
-            : 'We could not verify your email. Please try again.';
-
+        if (!active) return;
+        setRecovering(false);
         setStatus('error');
-        setMessage(errorMessage);
+        setMessage(error instanceof AuthCallbackError ? error.message : 'Unable to validate this session. Check your connection and request a new email link.');
       }
     };
-
-    handleCallback();
-  }, [incomingUrl, router]);
+    void handleCallback();
+    return () => {
+      active = false;
+      if (timer) clearTimeout(timer);
+    };
+  }, [incomingUrl, refreshSession, router, setRecovering]);
 
   return (
     <SafeAreaView

@@ -1,6 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import {
   useCallback,
   useRef,
@@ -8,6 +7,7 @@ import {
 } from 'react';
 import {
   ActivityIndicator,
+  AppState,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -20,9 +20,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { COLORS } from '../constants/colors';
 import { supabase } from '../lib/supabase';
 
-import {
-  showLocalNotification,
-} from '../services/notificationService';
+import { orderProgressIndex } from '../lib/orderStatus';
 
 
 // ======================================================
@@ -82,8 +80,7 @@ type Order = {
 };
 
 
-const ORDER_STATUS_STORAGE_KEY =
-  'luckyhub_order_statuses_v1';
+
 
 
 // ======================================================
@@ -183,101 +180,15 @@ function getStatusIcon(
 // STATUS NOTIFICATION MESSAGE
 // ======================================================
 
-function getOrderStatusNotification(
-  status: string
-): {
-  title: string;
-  bodyPrefix: string;
-} | null {
-
-  const normalized =
-    status
-      .trim()
-      .toLowerCase();
-
-
-  switch (
-    normalized
-  ) {
-
-    case 'processing':
-
-    case 'preparing':
-      return {
-        title:
-          'Order Processing',
-
-        bodyPrefix:
-          'Your Lucky Hub order is being prepared.',
-      };
-
-
-    case 'ready':
-
-    case 'ready for delivery':
-      return {
-        title:
-          'Order Ready',
-
-        bodyPrefix:
-          'Your Lucky Hub order is ready for dispatch.',
-      };
-
-
-    case 'shipped':
-      return {
-        title:
-          'Order Shipped',
-
-        bodyPrefix:
-          'Your Lucky Hub order has been dispatched.',
-      };
-
-
-    case 'out for delivery':
-      return {
-        title:
-          'Order Out for Delivery',
-
-        bodyPrefix:
-          'Your Lucky Hub order is on the way to you.',
-      };
-
-
-    case 'delivered':
-      return {
-        title:
-          'Order Delivered',
-
-        bodyPrefix:
-          'Your Lucky Hub order has been delivered.',
-      };
-
-
-    case 'cancelled':
-      return {
-        title:
-          'Order Cancelled',
-
-        bodyPrefix:
-          'Your Lucky Hub order has been cancelled.',
-      };
-
-
-    default:
-      return null;
-  }
-}
-
-
 // ======================================================
 // SCREEN
 // ======================================================
 
 export default function OrdersScreen() {
 
-  const statusStorageReadyRef =
-    useRef(false);
+  const requestVersion = useRef(0);
+  const { orderNumber } = useLocalSearchParams<{ orderNumber?: string }>();
+  const openedOrderNumber = useRef<string | undefined>(undefined);
 
 
   const [orders, setOrders] =
@@ -332,7 +243,7 @@ export default function OrdersScreen() {
       async (
         showLoader = true
       ) => {
-
+        const version = ++requestVersion.current;
         try {
 
           if (
@@ -529,7 +440,7 @@ export default function OrdersScreen() {
 
                   status:
                     raw.status ||
-                    'Processing',
+                    'Status unavailable',
 
                   total:
                     Number(
@@ -598,213 +509,39 @@ export default function OrdersScreen() {
             );
 
 
+          if (version !== requestVersion.current) return;
           setOrders(
             mappedOrders
           );
 
 
           // ==============================================
-          // ORDER STATUS CHANGE NOTIFICATIONS
-          //
-          // First load only saves the current statuses.
-          // Later refreshes compare against the saved
-          // statuses and notify only when something changed.
-          // ==============================================
-
-          try {
-
-            const savedStatusJson =
-              await AsyncStorage
-                .getItem(
-                  ORDER_STATUS_STORAGE_KEY
-                );
-
-
-            const previousStatuses:
-              Record<
-                string,
-                string
-              > =
-              savedStatusJson
-                ? JSON.parse(
-                    savedStatusJson
-                  )
-                : {};
-
-
-            const currentStatuses:
-              Record<
-                string,
-                string
-              > = {};
-
-
-            for (
-              const order
-              of mappedOrders
-            ) {
-
-              currentStatuses[
-                order.id
-              ] =
-                order.status;
-
-
-              if (
-                !statusStorageReadyRef
-                  .current
-              ) {
-                continue;
-              }
-
-
-              const previousStatus =
-                previousStatuses[
-                  order.id
-                ];
-
-
-              if (
-                !previousStatus
-              ) {
-                continue;
-              }
-
-
-              if (
-                previousStatus ===
-                order.status
-              ) {
-                continue;
-              }
-
-
-              const notification =
-                getOrderStatusNotification(
-                  order.status
-                );
-
-
-              if (
-                !notification
-              ) {
-                continue;
-              }
-
-
-              try {
-
-                await showLocalNotification(
-                  notification.title,
-                  `${notification.bodyPrefix} Order ${order.orderNumber}.`,
-                  {
-                    type:
-                      'order',
-
-                    orderNumber:
-                      order.orderNumber,
-
-                    orderId:
-                      order.id,
-
-                    status:
-                      order.status,
-                  }
-                );
-
-
-              } catch (
-                notificationError
-              ) {
-
-                console.log(
-                  'Order status notification error:',
-                  notificationError
-                );
-              }
-            }
-
-
-            await AsyncStorage
-              .setItem(
-                ORDER_STATUS_STORAGE_KEY,
-                JSON.stringify(
-                  currentStatuses
-                )
-              );
-
-
-            statusStorageReadyRef
-              .current =
-              true;
-
-
-          } catch (
-            statusStorageError
-          ) {
-
-            console.log(
-              'Order status storage error:',
-              statusStorageError
-            );
-          }
-
-
-          // ==============================================
           // REFRESH SELECTED ORDER TOO
           // ==============================================
 
-          if (
-            selectedOrder
-          ) {
+          setSelectedOrder(current =>
+            current
+              ? mappedOrders.find(item => item.id === current.id) ?? null
+              : current
+          );
+          setTrackingOrder(current =>
+            current
+              ? mappedOrders.find(item => item.id === current.id) ?? null
+              : current
+          );
 
-            const updated =
-              mappedOrders.find(
-                (
-                  item
-                ) =>
-                  item.id ===
-                  selectedOrder.id
-              );
-
-
-            if (
-              updated
-            ) {
-              setSelectedOrder(
-                updated
-              );
-            }
-          }
-
-
-          if (
-            trackingOrder
-          ) {
-
-            const updated =
-              mappedOrders.find(
-                (
-                  item
-                ) =>
-                  item.id ===
-                  trackingOrder.id
-              );
-
-
-            if (
-              updated
-            ) {
-              setTrackingOrder(
-                updated
-              );
-            }
+          if (orderNumber && openedOrderNumber.current !== orderNumber) {
+            const requested = mappedOrders.find(item => item.orderNumber === orderNumber);
+            if (!requested) throw new Error('This order is unavailable.');
+            openedOrderNumber.current = orderNumber;
+            setSelectedOrder(requested);
           }
 
         } catch (
           error: any
         ) {
 
+          if (version !== requestVersion.current) return;
           console.error(
             'Orders screen error:',
             error
@@ -818,17 +555,16 @@ export default function OrdersScreen() {
 
         } finally {
 
+          if (version === requestVersion.current) {
           setLoading(false);
 
           setRefreshing(
             false
           );
+          }
         }
       },
-      [
-        selectedOrder,
-        trackingOrder,
-      ]
+      [orderNumber]
     );
 
 
@@ -840,12 +576,14 @@ export default function OrdersScreen() {
     useCallback(
       () => {
 
-        loadOrders(
-          true
-        );
+        void loadOrders(true);
+        const subscription = AppState.addEventListener('change', state => {
+          if (state === 'active') void loadOrders(false);
+        });
+        return () => { subscription.remove(); requestVersion.current++; };
 
       },
-      []
+      [loadOrders]
     )
   );
 
@@ -2206,16 +1944,7 @@ function OrderTrackingView({
 }) {
 
   const trackingSteps = [
-    {
-      title:
-        'Order Confirmed',
 
-      description:
-        'Your order has been received.',
-
-      icon:
-        'receipt-outline' as const,
-    },
 
     {
       title:
@@ -2263,54 +1992,7 @@ function OrderTrackingView({
   ];
 
 
-  const getCurrentStep =
-    () => {
-
-      const status =
-        order.status
-          .toLowerCase();
-
-
-      switch (
-        status
-      ) {
-
-        case 'new':
-
-        case 'confirmed':
-          return 0;
-
-
-        case 'processing':
-
-        case 'preparing':
-          return 1;
-
-
-        case 'ready':
-
-        case 'ready for delivery':
-
-        case 'shipped':
-          return 2;
-
-
-        case 'out for delivery':
-          return 3;
-
-
-        case 'delivered':
-          return 4;
-
-
-        default:
-          return 0;
-      }
-    };
-
-
-  const currentStep =
-    getCurrentStep();
+  const currentStep = orderProgressIndex(order.status);
 
 
   return (

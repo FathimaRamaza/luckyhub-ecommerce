@@ -453,6 +453,8 @@ export default function CheckoutAddressScreen() {
   // LOAD DELIVERY FEE FROM SUPABASE
   // ======================================================
 
+  // Keep delivery resets and loading guards synchronous; checkout logic is unchanged.
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
 
     let cancelled =
@@ -597,6 +599,8 @@ export default function CheckoutAddressScreen() {
     deliveryMethod,
   ]);
 
+
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   // ======================================================
   // TOTALS
@@ -816,9 +820,7 @@ export default function CheckoutAddressScreen() {
               null,
 
             address:
-              deliveryMethod ===
-              'standard'
-                ? {
+                {
                     fullName:
                       fullName.trim(),
 
@@ -836,8 +838,7 @@ export default function CheckoutAddressScreen() {
 
                     postalCode:
                       postalCode.trim(),
-                  }
-                : null,
+                  },
           });
 
 

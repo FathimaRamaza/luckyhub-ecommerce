@@ -8,6 +8,7 @@ import {
   Image,
   Pressable,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
   View,
@@ -546,6 +547,45 @@ export default function ProductDetailsScreen() {
 
 
   // ====================================================
+  // SHARE PRODUCT
+  // ====================================================
+
+  const handleShareProduct =
+    async () => {
+      if (!product) {
+        return;
+      }
+
+      try {
+        const productLink =
+          `luckyhubmobile://product-details?id=${encodeURIComponent(
+            product.id
+          )}`;
+
+        const variantText =
+          selectedVariant
+            ? `\nOption: ${selectedVariant.variant_value}`
+            : '';
+
+        await Share.share({
+          title: product.name,
+          message:
+            `Check out ${product.name} on Lucky Hub!\n` +
+            `Price: Rs. ${currentPrice.toLocaleString()}` +
+            `${variantText}\n` +
+            `${productLink}`,
+        });
+      } catch (err: any) {
+        Alert.alert(
+          'Share Error',
+          err?.message ??
+            'Unable to share this product.'
+        );
+      }
+    };
+
+
+  // ====================================================
   // VALIDATE PURCHASE
   // ====================================================
 
@@ -857,6 +897,20 @@ export default function ProductDetailsScreen() {
               }
             />
           )}
+        </Pressable>
+
+
+        <Pressable
+          style={styles.headerIcon}
+          onPress={handleShareProduct}
+        >
+          <Ionicons
+            name="share-social-outline"
+            size={22}
+            color={
+              COLORS.textPrimary
+            }
+          />
         </Pressable>
       </View>
 
@@ -1196,6 +1250,70 @@ export default function ProductDetailsScreen() {
           >
             {product.name}
           </Text>
+
+
+          {/* BRAND / SKU */}
+
+          {(
+            product.brand?.trim() ||
+            product.sku?.trim()
+          ) ? (
+            <View
+              style={
+                styles.productMetaRow
+              }
+            >
+              {product.brand?.trim() ? (
+                <View
+                  style={
+                    styles.productMetaItem
+                  }
+                >
+                  <Text
+                    style={
+                      styles.productMetaLabel
+                    }
+                  >
+                    Brand
+                  </Text>
+
+                  <Text
+                    style={
+                      styles.productMetaValue
+                    }
+                    numberOfLines={1}
+                  >
+                    {product.brand}
+                  </Text>
+                </View>
+              ) : null}
+
+              {product.sku?.trim() ? (
+                <View
+                  style={
+                    styles.productMetaItem
+                  }
+                >
+                  <Text
+                    style={
+                      styles.productMetaLabel
+                    }
+                  >
+                    SKU
+                  </Text>
+
+                  <Text
+                    style={
+                      styles.productMetaValue
+                    }
+                    numberOfLines={1}
+                  >
+                    {product.sku}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+          ) : null}
 
 
           {/* CATEGORY */}
@@ -1914,8 +2032,49 @@ const styles =
     },
 
 
+    productMetaRow: {
+      marginTop: 10,
+      flexDirection: 'row',
+      alignItems: 'stretch',
+      gap: 8,
+    },
+
+
+    productMetaItem: {
+      flex: 1,
+      minHeight: 46,
+      paddingHorizontal: 10,
+      paddingVertical: 7,
+      borderWidth: 1,
+      borderColor:
+        COLORS.border,
+      borderRadius: 8,
+      backgroundColor:
+        COLORS.backgroundSoft,
+      justifyContent:
+        'center',
+    },
+
+
+    productMetaLabel: {
+      fontSize: 9,
+      fontWeight: '700',
+      color:
+        COLORS.textSecondary,
+      marginBottom: 2,
+    },
+
+
+    productMetaValue: {
+      fontSize: 11,
+      fontWeight: '900',
+      color:
+        COLORS.textPrimary,
+    },
+
+
     category: {
-      marginTop: 5,
+      marginTop: 8,
       fontSize: 10,
       fontWeight: '700',
       color:

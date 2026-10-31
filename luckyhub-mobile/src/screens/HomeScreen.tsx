@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import {
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -461,28 +462,9 @@ export default function HomeScreen() {
   // ====================================================
 
   const loadHomeData =
-    async (
-      isRefresh = false
-    ) => {
+    useCallback(async () => {
 
       try {
-
-        if (
-          isRefresh
-        ) {
-          setRefreshing(
-            true
-          );
-
-        } else {
-          setLoading(
-            true
-          );
-        }
-
-
-        setError('');
-
 
         const [
           productData,
@@ -507,6 +489,8 @@ export default function HomeScreen() {
               ),
           ]);
 
+
+        setError('');
 
         setProducts(
           productData
@@ -559,18 +543,25 @@ export default function HomeScreen() {
           false
         );
       }
+    }, []);
+
+
+  const reloadHomeData = (isRefresh = false) => {
+    if (isRefresh) {
+      setRefreshing(true);
+    } else {
+      setLoading(true);
+    }
+    setError('');
+    return loadHomeData();
+  };
+
+  useEffect(() => {
+    const loadInitialData = async () => {
+      await loadHomeData();
     };
-
-
-  useEffect(
-    () => {
-
-      loadHomeData();
-
-    },
-    []
-  );
-
+    void loadInitialData();
+  }, [loadHomeData]);
 
   // ====================================================
   // HOME BANNER AUTO SLIDE
@@ -969,7 +960,7 @@ export default function HomeScreen() {
               refreshing
             }
             onRefresh={() =>
-              loadHomeData(
+              reloadHomeData(
                 true
               )
             }
@@ -1408,7 +1399,7 @@ export default function HomeScreen() {
                 styles.retryButton
               }
               onPress={() =>
-                loadHomeData()
+                reloadHomeData()
               }
             >
 
@@ -2534,7 +2525,12 @@ const styles =
 
 
     bannerRemoteImage: {
-      ...StyleSheet.absoluteFillObject,
+      position:
+        'absolute',
+      top: 0,
+      right: 0,
+      bottom: 0,
+      left: 0,
       width:
         '100%',
       height:

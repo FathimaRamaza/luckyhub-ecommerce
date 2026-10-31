@@ -6,6 +6,7 @@ import {
 } from 'expo-router';
 
 import {
+  useCallback,
   useEffect,
   useState,
 } from 'react';
@@ -187,7 +188,7 @@ export default function CategoriesScreen() {
   // ======================================================
 
   const loadProducts =
-    async (
+    useCallback(async (
       category: Category
     ) => {
       try {
@@ -220,7 +221,7 @@ export default function CategoriesScreen() {
           false
         );
       }
-    };
+    }, []);
 
 
   // ======================================================
@@ -228,12 +229,12 @@ export default function CategoriesScreen() {
   // ======================================================
 
   const loadCategories =
-    async () => {
+    useCallback(async () => {
       try {
-        setError('');
-
         const data =
           await getCategories();
+
+        setError('');
 
         const visibleCategories =
           data.filter(
@@ -298,14 +299,15 @@ export default function CategoriesScreen() {
           false
         );
       }
-    };
+    }, [params.categoryId, loadProducts]);
 
 
   useEffect(() => {
-    loadCategories();
-  }, [
-    params.categoryId,
-  ]);
+    const loadInitialData = async () => {
+      await loadCategories();
+    };
+    void loadInitialData();
+  }, [loadCategories]);
 
 
   // ======================================================

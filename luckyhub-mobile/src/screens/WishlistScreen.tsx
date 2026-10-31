@@ -1,6 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect } from '@react-navigation/native';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import {
     useCallback,
     useState,
@@ -32,6 +31,11 @@ import {
 } from '../services/productService';
 
 
+import {
+    getWishlistProducts,
+    removeFromWishlist,
+} from '../services/wishlistService';
+
 // ======================================================
 // PRODUCT CATEGORY NAME
 // ======================================================
@@ -50,10 +54,7 @@ function getProductCategoryName(product: Product): string {
   return category.name ?? '';
 }
 
-import {
-    getWishlistProducts,
-    removeFromWishlist,
-} from '../services/wishlistService';
+
 
 
 // ======================================================

@@ -18,12 +18,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { COLORS } from '../constants/colors';
 import { supabase } from '../lib/supabase';
+import { useAuth } from '../contexts/AuthContext';
 
-const EMAIL_REDIRECT_URL =
-  'luckyhubmobile://auth/callback';
+import { AUTH_REDIRECT_URL } from '../lib/authRedirect';
 
 export default function SignupScreen() {
   const router = useRouter();
+  const { refreshSession, setRecovering } = useAuth();
 
   const [fullName, setFullName] =
     useState('');
@@ -117,7 +118,7 @@ export default function SignupScreen() {
 
           options: {
             emailRedirectTo:
-              EMAIL_REDIRECT_URL,
+              AUTH_REDIRECT_URL,
 
             data: {
               full_name: cleanName,
@@ -140,6 +141,12 @@ export default function SignupScreen() {
        * a session.
        */
       if (data.session) {
+        if (!await refreshSession()) {
+          Alert.alert('Signup', 'Your account was created. Please log in to continue.');
+          router.replace('/login');
+          return;
+        }
+        setRecovering(false);
         router.replace(
           '/(tabs)/home'
         );

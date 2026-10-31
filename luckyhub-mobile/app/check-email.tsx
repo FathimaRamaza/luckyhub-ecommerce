@@ -17,8 +17,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { COLORS } from '../src/constants/colors';
 import { supabase } from '../src/lib/supabase';
 
-const EMAIL_REDIRECT_URL =
-  'luckyhubmobile://auth/callback';
+import { AUTH_REDIRECT_URL } from '../src/lib/authRedirect';
 
 export default function CheckEmailPage() {
   const router = useRouter();
@@ -56,7 +55,7 @@ export default function CheckEmailPage() {
 
           options: {
             emailRedirectTo:
-              EMAIL_REDIRECT_URL,
+              AUTH_REDIRECT_URL,
           },
         });
 

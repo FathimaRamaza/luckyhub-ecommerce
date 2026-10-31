@@ -2,7 +2,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import {
   useCallback,
-  useEffect,
   useMemo,
   useState,
 } from 'react';
@@ -248,25 +247,21 @@ export default function CartScreen() {
   // RECALCULATE APPLIED COUPON WHEN CART CHANGES
   // ======================================================
 
-  useEffect(() => {
-    if (!couponResult) {
-      return;
-    }
+  const [previousSubtotal, setPreviousSubtotal] = useState(subtotal);
 
-    try {
-      const updatedResult =
-        calculateCouponDiscount(
-          couponResult.coupon,
-          subtotal
+  if (previousSubtotal !== subtotal) {
+    setPreviousSubtotal(subtotal);
+
+    if (couponResult) {
+      try {
+        setCouponResult(
+          calculateCouponDiscount(couponResult.coupon, subtotal)
         );
-
-      setCouponResult(
-        updatedResult
-      );
-    } catch {
-      setCouponResult(null);
+      } catch {
+        setCouponResult(null);
+      }
     }
-  }, [subtotal]);
+  }
 
 
   // ======================================================

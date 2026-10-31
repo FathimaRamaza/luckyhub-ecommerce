@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -54,11 +54,11 @@ export default function SearchScreen() {
   // LOAD PRODUCTS FROM SUPABASE
   // ======================================================
 
-  const loadProducts = async () => {
+  const loadProducts = useCallback(async () => {
     try {
-      setError('');
-
       const data = await getActiveProducts();
+
+      setError('');
 
       setProducts(data);
     } catch (err) {
@@ -71,12 +71,15 @@ export default function SearchScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, []);
 
 
   useEffect(() => {
-    loadProducts();
-  }, []);
+    const loadInitialData = async () => {
+      await loadProducts();
+    };
+    void loadInitialData();
+  }, [loadProducts]);
 
 
   // ======================================================

@@ -18,9 +18,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { COLORS } from '../constants/colors';
 import { supabase } from '../lib/supabase';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function LoginScreen() {
   const router = useRouter();
+  const { refreshSession, setRecovering } = useAuth();
 
   const [email, setEmail] =
     useState('');
@@ -79,8 +81,14 @@ export default function LoginScreen() {
         return;
       }
 
+      const session = await refreshSession();
+      if (!session) {
+        Alert.alert('Login Failed', 'Unable to validate your session. Please try again.');
+        return;
+      }
+      setRecovering(false);
       router.replace('/(tabs)/home');
-    } catch (error) {
+    } catch {
       Alert.alert(
         'Login Failed',
         'Something went wrong. Please try again.'
@@ -91,10 +99,7 @@ export default function LoginScreen() {
   };
 
   const handleForgotPassword = () => {
-    Alert.alert(
-      'Forgot Password',
-      'Password reset will be connected later.'
-    );
+    router.push('/forgot-password');
   };
 
   return (
@@ -239,7 +244,7 @@ export default function LoginScreen() {
               <Text
                 style={styles.signupQuestion}
               >
-                Don't have an account?
+                Don&apos;t have an account?
               </Text>
 
               <Pressable

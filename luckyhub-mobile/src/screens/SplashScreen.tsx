@@ -6,10 +6,11 @@ import {
   View,
 } from 'react-native';
 
-import { supabase } from '../lib/supabase';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function SplashScreen() {
   const router = useRouter();
+  const { refreshSession, recovering } = useAuth();
 
   const [step, setStep] =
     useState<'logo' | 'splash'>(
@@ -66,18 +67,15 @@ export default function SplashScreen() {
           // CHECK LOGIN SESSION
           // ==========================================
 
-          const {
-            data: {
-              session,
-            },
-          } =
-            await supabase.auth.getSession();
+          const session = await refreshSession();
 
           if (!mounted) {
             return;
           }
 
-          if (session) {
+          if (session && recovering) {
+            router.replace('/reset-password');
+          } else if (session) {
             router.replace(
               '/(tabs)/home'
             );
@@ -107,7 +105,7 @@ export default function SplashScreen() {
     return () => {
       mounted = false;
     };
-  }, [router]);
+  }, [router, refreshSession, recovering]);
 
 
   return (

@@ -1,38 +1,14 @@
-import Constants from 'expo-constants';
-import * as Notifications from 'expo-notifications';
+import Constants, {
+  ExecutionEnvironment,
+} from 'expo-constants';
+
 import {
-    Platform,
+  Platform,
 } from 'react-native';
 
 import {
-    supabase,
+  supabase,
 } from '../lib/supabase';
-
-
-// ======================================================
-// NOTIFICATION HANDLER
-// ======================================================
-
-Notifications.setNotificationHandler({
-
-  handleNotification:
-    async () => ({
-
-      shouldPlaySound:
-        true,
-
-      shouldSetBadge:
-        false,
-
-      shouldShowBanner:
-        true,
-
-      shouldShowList:
-        true,
-
-    }),
-
-});
 
 
 // ======================================================
@@ -57,6 +33,138 @@ export type LocalNotificationData =
 
 
 // ======================================================
+// EXPO NOTIFICATIONS MODULE
+//
+// IMPORTANT:
+// On Android Expo Go, remote push notification support is
+// unavailable on current Expo SDK versions. In this project,
+// importing / initializing expo-notifications during startup
+// caused Expo Go to close with an uncaught error.
+//
+// Therefore:
+// - Expo Go Android: notification native APIs are skipped.
+// - Development / production builds: expo-notifications loads
+//   normally and push/local notifications work.
+// ======================================================
+
+type NotificationsModule =
+  typeof import('expo-notifications');
+
+
+let notificationsModulePromise:
+  Promise<NotificationsModule> | null =
+  null;
+
+
+let notificationHandlerConfigured =
+  false;
+
+
+function isAndroidExpoGo() {
+
+  return (
+    Platform.OS ===
+      'android' &&
+    Constants
+      .executionEnvironment ===
+      ExecutionEnvironment
+        .StoreClient
+  );
+}
+
+
+export async function getNotificationsModule():
+Promise<NotificationsModule | null> {
+
+  if (
+    Platform.OS ===
+    'web'
+  ) {
+
+    return null;
+  }
+
+
+  if (
+    isAndroidExpoGo()
+  ) {
+
+    return null;
+  }
+
+
+  try {
+
+    if (
+      !notificationsModulePromise
+    ) {
+
+      notificationsModulePromise =
+        import(
+          'expo-notifications'
+        );
+    }
+
+
+    const Notifications =
+      await notificationsModulePromise;
+
+
+    if (
+      !notificationHandlerConfigured
+    ) {
+
+      Notifications
+        .setNotificationHandler({
+
+          handleNotification:
+            async () => ({
+
+              shouldPlaySound:
+                true,
+
+              shouldSetBadge:
+                false,
+
+              shouldShowBanner:
+                true,
+
+              shouldShowList:
+                true,
+
+            }),
+
+        });
+
+
+      notificationHandlerConfigured =
+        true;
+    }
+
+
+    return Notifications;
+
+
+  } catch (
+    error
+  ) {
+
+    notificationsModulePromise =
+      null;
+
+
+    console.log(
+      'expo-notifications unavailable in current runtime:',
+      error
+    );
+
+
+    return null;
+  }
+}
+
+
+// ======================================================
 // ANDROID CHANNEL
 // ======================================================
 
@@ -66,6 +174,19 @@ export async function configureNotificationChannel() {
     Platform.OS !==
     'android'
   ) {
+
+    return;
+  }
+
+
+  const Notifications =
+    await getNotificationsModule();
+
+
+  if (
+    !Notifications
+  ) {
+
     return;
   }
 
@@ -105,7 +226,49 @@ export async function configureNotificationChannel() {
 export async function requestNotificationPermission():
 Promise<boolean> {
 
-  await configureNotificationChannel();
+  const Notifications =
+    await getNotificationsModule();
+
+
+  if (
+    !Notifications
+  ) {
+
+    return false;
+  }
+
+
+  if (
+    Platform.OS ===
+    'android'
+  ) {
+
+    await Notifications
+      .setNotificationChannelAsync(
+        'orders',
+        {
+
+          name:
+            'Order Updates',
+
+          importance:
+            Notifications
+              .AndroidImportance
+              .HIGH,
+
+          vibrationPattern: [
+            0,
+            250,
+            250,
+            250,
+          ],
+
+          sound:
+            'default',
+
+        }
+      );
+  }
 
 
   const {
@@ -120,6 +283,7 @@ Promise<boolean> {
     existingStatus ===
     'granted'
   ) {
+
     return true;
   }
 
@@ -263,15 +427,80 @@ async function savePushToken(
 // ======================================================
 // REGISTER EXPO PUSH TOKEN
 //
-// Remote push notifications require an Expo development
-// build / production build on current Expo SDK versions.
-// This function fails safely when running in Expo Go.
+// Expo Go on Android cannot use remote push notifications.
+// We intentionally return before loading expo-notifications
+// so Expo Go can run the Lucky Hub app without crashing.
+//
+// Development / production builds continue with the normal
+// Expo push-token registration flow.
 // ======================================================
 
 export async function registerForPushNotifications():
 Promise<PushRegistrationResult> {
 
+  if (
+    isAndroidExpoGo()
+  ) {
+
+    return {
+
+      success:
+        false,
+
+      token:
+        null,
+
+      message:
+        'Remote push notifications are skipped in Expo Go on Android. They will be enabled in the Lucky Hub development build.',
+
+    };
+  }
+
+
+  if (
+    Platform.OS ===
+    'web'
+  ) {
+
+    return {
+
+      success:
+        false,
+
+      token:
+        null,
+
+      message:
+        'Push notification registration is not enabled on web.',
+
+    };
+  }
+
+
   try {
+
+    const Notifications =
+      await getNotificationsModule();
+
+
+    if (
+      !Notifications
+    ) {
+
+      return {
+
+        success:
+          false,
+
+        token:
+          null,
+
+        message:
+          'Notifications are unavailable in the current runtime.',
+
+      };
+    }
+
 
     const permissionGranted =
       await requestNotificationPermission();
@@ -313,7 +542,7 @@ Promise<PushRegistrationResult> {
           null,
 
         message:
-          'Push notifications will be activated when the Lucky Hub development build is created.',
+          'Push notifications will be activated when the Lucky Hub development build is configured.',
 
       };
     }
@@ -360,10 +589,6 @@ Promise<PushRegistrationResult> {
       );
 
 
-      console.log(
-        'Expo push token registered:',
-        token
-      );
 
 
       return {
@@ -379,7 +604,9 @@ Promise<PushRegistrationResult> {
       };
 
 
-    } catch (tokenError) {
+    } catch (
+      tokenError
+    ) {
 
       console.log(
         'Expo push token unavailable in current build:',
@@ -402,7 +629,9 @@ Promise<PushRegistrationResult> {
     }
 
 
-  } catch (error: any) {
+  } catch (
+    error: any
+  ) {
 
     console.error(
       'registerForPushNotifications error:',
@@ -462,6 +691,7 @@ export async function deactivateCurrentUserPushTokens() {
   if (
     !user
   ) {
+
     return;
   }
 
@@ -506,7 +736,12 @@ export async function deactivateCurrentUserPushTokens() {
 // ======================================================
 // LOCAL NOTIFICATION
 //
-// Local notifications can be used now for testing.
+// Local notification calls are skipped in Android Expo Go
+// in this project so expo-notifications is never initialized
+// there. This prevents the SDK 57 Expo Go startup crash.
+//
+// They work normally in a Lucky Hub development / production
+// build.
 // ======================================================
 
 export async function showLocalNotification(
@@ -517,6 +752,37 @@ export async function showLocalNotification(
     {}
 ) {
 
+  if (
+    isAndroidExpoGo()
+  ) {
+
+    console.log(
+      'Local notification skipped in Android Expo Go:',
+      title,
+      body
+    );
+
+    return;
+  }
+
+
+  const Notifications =
+    await getNotificationsModule();
+
+
+  if (
+    !Notifications
+  ) {
+
+    console.log(
+      'Local notification unavailable in current runtime:',
+      title
+    );
+
+    return;
+  }
+
+
   const permissionGranted =
     await requestNotificationPermission();
 
@@ -525,9 +791,11 @@ export async function showLocalNotification(
     !permissionGranted
   ) {
 
-    throw new Error(
-      'Notification permission is required.'
+    console.log(
+      'Local notification skipped because permission was not granted.'
     );
+
+    return;
   }
 
 

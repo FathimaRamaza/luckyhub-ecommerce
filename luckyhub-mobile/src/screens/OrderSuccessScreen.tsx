@@ -3,10 +3,7 @@ import {
   useLocalSearchParams,
   useRouter,
 } from 'expo-router';
-import {
-  useEffect,
-  useRef,
-} from 'react';
+
 import {
   Pressable,
   StyleSheet,
@@ -17,9 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { COLORS } from '../constants/colors';
 
-import {
-  showOrderPlacedNotification,
-} from '../services/notificationService';
+
 
 
 export default function OrderSuccessScreen() {
@@ -27,8 +22,7 @@ export default function OrderSuccessScreen() {
     useRouter();
 
 
-  const notificationShownRef =
-    useRef(false);
+
 
 
   const params =
@@ -81,56 +75,7 @@ export default function OrderSuccessScreen() {
   // ORDER PLACED NOTIFICATION
   // ======================================================
 
-  useEffect(() => {
 
-    if (
-      notificationShownRef
-        .current
-    ) {
-      return;
-    }
-
-
-    if (
-      !params.orderNumber
-    ) {
-      return;
-    }
-
-
-    notificationShownRef
-      .current =
-      true;
-
-
-    const sendNotification =
-      async () => {
-
-        try {
-
-          await showOrderPlacedNotification(
-            orderNumber
-          );
-
-
-        } catch (
-          error
-        ) {
-
-          console.log(
-            'Order placed notification error:',
-            error
-          );
-        }
-      };
-
-
-    sendNotification();
-
-  }, [
-    orderNumber,
-    params.orderNumber,
-  ]);
 
 
   // ======================================================

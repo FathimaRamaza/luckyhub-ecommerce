@@ -1,6 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect } from '@react-navigation/native';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import {
   useCallback,
   useState,
@@ -235,7 +234,7 @@ export default function ProfileScreen() {
   // ====================================================
 
   const loadAddresses =
-    async (
+    useCallback(async (
       currentUserId?: string
     ) => {
       try {
@@ -316,7 +315,7 @@ export default function ProfileScreen() {
           error
         );
       }
-    };
+    }, [userId]);
 
 
   // ====================================================
@@ -564,7 +563,7 @@ export default function ProfileScreen() {
           );
         }
       },
-      []
+      [loadAddresses, router]
     );
 
 
@@ -1788,10 +1787,7 @@ export default function ProfileScreen() {
             title="Notifications"
             subtitle="Orders, offers and updates"
             onPress={() =>
-              showComingSoon(
-                'Notifications',
-                'Step 35'
-              )
+              router.push('/notifications')
             }
           />
         </View>
