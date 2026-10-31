@@ -1,3 +1,4 @@
+import { updateSingleRow, safeDocumentUrl } from '../services/adminData.js'
 import {
   CheckCircle2,
   ChevronDown,
@@ -802,7 +803,7 @@ function PrintingRequests() {
   }
 
   const updateRequestStatus = async (request, nextStatus) => {
-    if (!request) return
+    if (!request || requestActionLoading) return
 
     const idKey = getExistingKey(
       request,
@@ -823,18 +824,14 @@ function PrintingRequests() {
     setRequestActionLoading(true)
 
     try {
-      const { error: updateError } = await supabase
-        .from(activeTableName)
-        .update({ [statusKey]: nextStatus })
-        .eq(idKey, request[idKey])
-
-      if (updateError) throw updateError
+      await updateSingleRow(supabase, activeTableName, request, { [statusKey]: nextStatus }, idKey, { [statusKey]: request[statusKey] })
 
       await loadPrintingRequests(true)
       setSelectedRequest(null)
       setRequestModalMode(null)
     } catch (actionError) {
       console.error('Printing request action error:', actionError)
+      setError(actionError?.message || 'Printing request could not be updated.')
       window.alert(actionError?.message || 'Printing request could not be updated.')
     } finally {
       setRequestActionLoading(false)
@@ -2211,6 +2208,8 @@ function PrintingRequests() {
             </div>
 
             <div style={actionUi.footer}>
+              {safeDocumentUrl(selectedRequest) && <a style={actionUi.button} href={safeDocumentUrl(selectedRequest)} target="_blank" rel="noopener noreferrer">Open print file</a>}
+
               {requestModalMode === 'actions' && (
                 <>
                   <button type="button" style={actionUi.button} disabled={requestActionLoading} onClick={() => updateRequestStatus(selectedRequest, 'reviewing')}>

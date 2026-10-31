@@ -1,3 +1,4 @@
+import { updateSingleRow } from '../services/adminData.js'
 import {
   Bell,
   Boxes,
@@ -236,24 +237,8 @@ function Notifications() {
     }
 
     try {
-      const {
-        error:
-          updateError,
-      } = await supabase
-        .from('notifications')
-        .update({
-          is_read: true,
-          read_at:
-            new Date().toISOString(),
-        })
-        .eq(
-          'id',
-          notification.id
-        )
-
-      if (updateError) {
-        throw updateError
-      }
+      await updateSingleRow(supabase, 'notifications', notification, { is_read: true, read_at: new Date().toISOString() })
+      window.dispatchEvent(new Event('luckyhub:notifications-updated'))
 
       setNotifications(
         (current) =>
@@ -275,6 +260,7 @@ function Notifications() {
         'Mark notification read error:',
         updateError
       )
+      setError(updateError.message || 'Notification could not be marked read.')
     }
   }
 
@@ -335,6 +321,7 @@ function Notifications() {
 
       try {
         const {
+          data: updatedNotifications,
           error:
             updateError,
         } = await supabase
@@ -348,23 +335,17 @@ function Notifications() {
             'is_read',
             false
           )
+          .select('id, is_read')
 
         if (updateError) {
           throw updateError
         }
 
-        setNotifications(
-          (current) =>
-            current.map(
-              (item) => ({
-                ...item,
-                is_read: true,
-                read_at:
-                  item.read_at ||
-                  new Date().toISOString(),
-              })
-            )
-        )
+        const ids = new Set((updatedNotifications || []).filter((item) => item.is_read === true).map((item) => item.id))
+        if (!ids.size) throw new Error('No notifications were confirmed read. Refresh and check access.')
+        setNotifications((current) => current.map((item) => ids.has(item.id) ? { ...item, is_read: true } : item))
+        window.dispatchEvent(new Event('luckyhub:notifications-updated'))
+        await loadNotifications(true)
       } catch (updateError) {
         console.error(
           'Mark all notifications read error:',

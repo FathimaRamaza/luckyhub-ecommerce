@@ -26,6 +26,7 @@ function AdminLayout() {
   const location = useLocation()
 
   const [collapsed, setCollapsed] = useState(false)
+  const [mobileOpen, setMobileOpen] = useState(false)
   const [unreadNotifications, setUnreadNotifications] = useState(0)
 
   const pageDetails = useMemo(() => {
@@ -69,6 +70,8 @@ function AdminLayout() {
         title: 'SALES',
         subtitle: 'Monitor shop sales',
       },
+
+      '/promotions': { title: 'PROMOTIONS', subtitle: 'Manage scheduled home promotions' },
 
       '/reports': {
         title: 'REPORTS',
@@ -169,6 +172,18 @@ function AdminLayout() {
     }
   }, [location.pathname])
 
+  useEffect(() => {
+    const reload = () => { if (document.visibilityState === 'visible') loadUnreadNotificationCount() }
+    window.addEventListener('luckyhub:notifications-updated', reload)
+    window.addEventListener('focus', reload)
+    document.addEventListener('visibilitychange', reload)
+    return () => {
+      window.removeEventListener('luckyhub:notifications-updated', reload)
+      window.removeEventListener('focus', reload)
+      document.removeEventListener('visibilitychange', reload)
+    }
+  }, [])
+
   async function handleLogout() {
     await logoutStaff()
 
@@ -199,11 +214,12 @@ function AdminLayout() {
             type="button"
             className="navbar-menu-button"
             onClick={() =>
-              setCollapsed(
-                (current) => !current
-              )
+              window.matchMedia('(max-width: 850px)').matches
+                ? setMobileOpen((current) => !current)
+                : setCollapsed((current) => !current)
             }
             aria-label="Toggle sidebar"
+            aria-expanded={mobileOpen || !collapsed}
           >
             <Menu size={19} />
           </button>
@@ -357,7 +373,10 @@ function AdminLayout() {
 
       {/* SIDEBAR */}
 
-      <Sidebar collapsed={collapsed} />
+      {mobileOpen && <button className="sidebar-backdrop" aria-label="Close navigation" onClick={() => setMobileOpen(false)} />}
+      <div className={mobileOpen ? 'mobile-sidebar-open' : ''} onKeyDown={(event) => { if (event.key === 'Escape') setMobileOpen(false) }}>
+        <Sidebar collapsed={collapsed && !mobileOpen} onNavigate={() => setMobileOpen(false)} />
+      </div>
 
 
       {/* PAGE */}

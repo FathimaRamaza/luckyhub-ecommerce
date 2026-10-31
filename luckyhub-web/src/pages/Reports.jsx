@@ -1,3 +1,6 @@
+import { isRevenueOrder, readAllRows } from '../services/adminData.js'
+import { ORDER_STATUSES } from '../services/orders.js'
+import { useOrderRefresh } from '../services/useOrderRefresh.js'
 import {
   AlertTriangle,
   Banknote,
@@ -130,17 +133,11 @@ function Reports() {
         categoryResult,
         printingResult,
       ] = await Promise.all([
-        supabase
-          .from('orders')
-          .select('*'),
+        readAllRows(supabase, 'orders'),
 
-        supabase
-          .from('products')
-          .select('*'),
+        readAllRows(supabase, 'products'),
 
-        supabase
-          .from('categories')
-          .select('*'),
+        readAllRows(supabase, 'categories'),
 
         loadPrintingTable(),
       ])
@@ -234,45 +231,9 @@ function Reports() {
     )
   }
 
-  const getPaymentStatus = (order) => {
-    return normalizeStatus(
-      getValue(
-        order,
-        [
-          'payment_status',
-          'paymentStatus',
-        ],
-        ''
-      )
-    )
-  }
+  const isCompletedSale = isRevenueOrder
 
-  const isCompletedSale = (order) => {
-    const orderStatus =
-      getOrderStatus(order)
-
-    const paymentStatus =
-      getPaymentStatus(order)
-
-    if (
-      [
-        'cancelled',
-        'canceled',
-        'rejected',
-      ].includes(orderStatus)
-    ) {
-      return false
-    }
-
-    return (
-      [
-        'completed',
-        'complete',
-        'delivered',
-      ].includes(orderStatus) ||
-      paymentStatus === 'paid'
-    )
-  }
+  useOrderRefresh('luckyhub-reports-refresh', () => loadReports(true))
 
   /* =========================================
      PRODUCT HELPERS
@@ -299,6 +260,7 @@ function Reports() {
       getValue(
         product,
         [
+          'alert_quantity',
           'low_stock_threshold',
           'reorder_level',
           'minimum_stock',
@@ -568,57 +530,11 @@ function Reports() {
 
   const orderStatusBreakdown =
     useMemo(() => {
-      const groups = {
-        Pending: 0,
-        Processing: 0,
-        Completed: 0,
-        Cancelled: 0,
-      }
-
-      reportOrders.forEach(
-        (order) => {
-          const status =
-            getOrderStatus(order)
-
-          if (
-            [
-              'completed',
-              'complete',
-              'delivered',
-            ].includes(status)
-          ) {
-            groups.Completed += 1
-            return
-          }
-
-          if (
-            [
-              'cancelled',
-              'canceled',
-              'rejected',
-            ].includes(status)
-          ) {
-            groups.Cancelled += 1
-            return
-          }
-
-          if (
-            [
-              'processing',
-              'preparing',
-              'confirmed',
-              'shipped',
-              'shipping',
-              'dispatched',
-            ].includes(status)
-          ) {
-            groups.Processing += 1
-            return
-          }
-
-          groups.Pending += 1
-        }
-      )
+      const groups = Object.fromEntries([...ORDER_STATUSES, 'Unknown'].map((status) => [status, 0]))
+      reportOrders.forEach((order) => {
+        const label = ORDER_STATUSES.find((status) => status.toLowerCase() === getOrderStatus(order)) || 'Unknown'
+        groups[label] += 1
+      })
 
       return Object.entries(
         groups
@@ -1567,7 +1483,7 @@ function Reports() {
                   stats.revenue
                 )
           }
-          note={`${stats.completedSales} completed sales`}
+          note={`${stats.completedSales} paid orders`}
           icon={Banknote}
           tone="green"
           currency

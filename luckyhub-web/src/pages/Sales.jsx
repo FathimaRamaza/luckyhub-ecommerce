@@ -1,3 +1,6 @@
+import { updateOrderFields } from '../services/orders.js'
+import { isRevenueOrder, readAllRows } from '../services/adminData.js'
+import { useOrderRefresh } from '../services/useOrderRefresh.js'
 import {
   Banknote,
   CheckCircle2,
@@ -257,14 +260,6 @@ function Sales() {
     return fallback
   }
 
-  const getExistingKey = (object, keys) => {
-    if (!object) return null
-    for (const key of keys) {
-      if (Object.prototype.hasOwnProperty.call(object, key)) return key
-    }
-    return null
-  }
-
   const toNumber = (value) => {
     const number = Number(value)
     return Number.isFinite(number) ? number : 0
@@ -298,9 +293,7 @@ function Sales() {
     setError('')
 
     try {
-      const { data, error: orderError } = await supabase
-        .from('orders')
-        .select('*')
+      const { data, error: orderError } = await readAllRows(supabase, 'orders')
 
       if (orderError) {
         throw orderError
@@ -707,30 +700,8 @@ function Sales() {
       getOrderStatus(order)
     )
 
-    const paymentStatus = normalizeStatus(
-      getPaymentStatus(order)
-    )
-
-    if (
-      [
-        'cancelled',
-        'canceled',
-        'rejected',
-      ].includes(orderStatus)
-    ) {
-      return 'cancelled'
-    }
-
-    if (
-      [
-        'completed',
-        'complete',
-        'delivered',
-      ].includes(orderStatus) ||
-      paymentStatus === 'paid'
-    ) {
-      return 'completed'
-    }
+    if (['cancelled', 'canceled', 'rejected'].includes(orderStatus)) return 'cancelled'
+    if (isRevenueOrder(order)) return 'completed'
 
     return 'pending'
   }
@@ -1127,26 +1098,11 @@ function Sales() {
   }
 
   const updateSaleOrder = async (order, changes) => {
-    const idKey = getExistingKey(
-      order,
-      ['id', 'order_id', 'order_number', 'order_no', 'reference']
-    )
-
-    if (!idKey) {
-      window.alert('Order ID column could not be detected.')
-      return
-    }
-
     setSaleActionLoading(true)
 
     try {
-      const { error: updateError } = await supabase
-        .from('orders')
-        .update(changes)
-        .eq(idKey, order[idKey])
-
-      if (updateError) throw updateError
-
+      await updateOrderFields(supabase, order, changes)
+      window.dispatchEvent(new Event('luckyhub:orders-updated'))
       await loadSales(true)
       setSelectedSale(null)
     } catch (actionError) {
@@ -1157,27 +1113,10 @@ function Sales() {
     }
   }
 
-  const markSalePaid = async (order) => {
-    const paymentKey = getExistingKey(order, ['payment_status', 'paymentStatus'])
+  const markSalePaid = async (order) => updateSaleOrder(order, { payment_status: 'Paid' })
+  const markSaleCompleted = async (order) => updateSaleOrder(order, { status: 'Delivered' })
 
-    if (!paymentKey) {
-      window.alert('This orders table does not have a payment status column.')
-      return
-    }
-
-    await updateSaleOrder(order, { [paymentKey]: 'paid' })
-  }
-
-  const markSaleCompleted = async (order) => {
-    const statusKey = getExistingKey(order, ['status', 'order_status'])
-
-    if (!statusKey) {
-      window.alert('Order status column could not be detected.')
-      return
-    }
-
-    await updateSaleOrder(order, { [statusKey]: 'completed' })
-  }
+  useOrderRefresh('luckyhub-sales-orders-refresh', () => loadSales(true))
 
   /* =========================================
      EXPORT PDF
@@ -2976,9 +2915,7 @@ function Sales() {
                 </button>
               )}
 
-              {getSaleStatus(
-                selectedSale
-              ) !== 'completed' && (
+              {selectedSale.status === 'Out for Delivery' && (
                 <button
                   type="button"
                   style={
@@ -2993,7 +2930,7 @@ function Sales() {
                     )
                   }
                 >
-                  Mark Completed
+                  Mark Delivered
                 </button>
               )}
 

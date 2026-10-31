@@ -9,6 +9,7 @@ import {
   Printer,
   Users,
   CircleDollarSign,
+  Megaphone,
   BarChart3,
   Settings,
   ChevronRight,
@@ -58,6 +59,11 @@ const menuItems = [
     icon: CircleDollarSign,
   },
   {
+    name: 'Promotions',
+    path: '/promotions',
+    icon: Megaphone,
+  },
+  {
     name: 'Reports',
     path: '/reports',
     icon: BarChart3,
@@ -69,7 +75,7 @@ const menuItems = [
   },
 ]
 
-function Sidebar({ collapsed = false }) {
+function Sidebar({ collapsed = false, onNavigate }) {
   return (
     <aside
       className={`admin-sidebar ${
@@ -100,10 +106,19 @@ function Sidebar({ collapsed = false }) {
             <NavLink
               key={item.name}
               to={item.path}
-              title={collapsed ? item.name : undefined}
-              className={({ isActive }) =>
+              onClick={onNavigate}
+              title={
+                collapsed
+                  ? item.name
+                  : undefined
+              }
+              className={({
+                isActive,
+              }) =>
                 `sidebar-link ${
-                  isActive ? 'sidebar-link-active' : ''
+                  isActive
+                    ? 'sidebar-link-active'
+                    : ''
                 }`
               }
             >
@@ -114,7 +129,9 @@ function Sidebar({ collapsed = false }) {
                 />
 
                 {!collapsed && (
-                  <span>{item.name}</span>
+                  <span>
+                    {item.name}
+                  </span>
                 )}
               </div>
 
@@ -132,8 +149,13 @@ function Sidebar({ collapsed = false }) {
       {!collapsed && (
         <div className="sidebar-bottom">
           <div className="sidebar-version">
-            <strong>Lucky Hub v1.0.0</strong>
-            <span>Management Portal</span>
+            <strong>
+              Lucky Hub v1.0.0
+            </strong>
+
+            <span>
+              Management Portal
+            </span>
           </div>
         </div>
       )}

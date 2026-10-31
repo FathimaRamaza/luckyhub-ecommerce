@@ -1,3 +1,4 @@
+import { updateSingleRow, deleteSingleRow, readAllRows } from '../services/adminData.js'
 import {
   CheckCircle2,
   ChevronDown,
@@ -261,13 +262,9 @@ function Categories() {
         categoryResult,
         productResult,
       ] = await Promise.all([
-        supabase
-          .from('categories')
-          .select('*'),
+        readAllRows(supabase, 'categories'),
 
-        supabase
-          .from('products')
-          .select('*'),
+        readAllRows(supabase, 'products'),
       ])
 
       if (categoryResult.error) {
@@ -687,6 +684,7 @@ function Categories() {
       event
     ) => {
       event.preventDefault()
+      if (saving) return
 
       const name =
         form.name.trim()
@@ -703,9 +701,9 @@ function Categories() {
         form.slug.trim() ||
         createSlug(name)
 
-      if (!slug) {
+      if (!slug || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) {
         window.alert(
-          'Category slug is required.'
+          'Use lowercase letters, numbers and single hyphens for the category slug.'
         )
 
         return
@@ -738,24 +736,7 @@ function Categories() {
               editingCategory
             )
 
-          const {
-            error:
-              updateError,
-          } = await supabase
-            .from(
-              'categories'
-            )
-            .update(
-              categoryData
-            )
-            .eq(
-              'id',
-              categoryId
-            )
-
-          if (updateError) {
-            throw updateError
-          }
+          await updateSingleRow(supabase, 'categories', { id: categoryId }, categoryData)
         } else {
           const {
             error:
@@ -859,24 +840,7 @@ function Categories() {
       }
 
       try {
-        const {
-          error:
-            deleteError,
-        } = await supabase
-          .from(
-            'categories'
-          )
-          .delete()
-          .eq(
-            'id',
-            getCategoryId(
-              category
-            )
-          )
-
-        if (deleteError) {
-          throw deleteError
-        }
+        await deleteSingleRow(supabase, 'categories', { id: getCategoryId(category) })
 
         await loadData(
           true
@@ -912,27 +876,7 @@ function Categories() {
         )
 
       try {
-        const {
-          error:
-            updateError,
-        } = await supabase
-          .from(
-            'categories'
-          )
-          .update({
-            is_active:
-              newStatus,
-          })
-          .eq(
-            'id',
-            getCategoryId(
-              category
-            )
-          )
-
-        if (updateError) {
-          throw updateError
-        }
+        await updateSingleRow(supabase, 'categories', { id: getCategoryId(category) }, { is_active: newStatus })
 
         setCategories(
           (current) =>

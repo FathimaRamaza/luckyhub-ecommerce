@@ -30,6 +30,10 @@ import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
 
 import { supabase } from '../services/supabase.js'
+import { getCurrentStaff } from '../services/auth.js'
+import { readAllRows } from '../services/adminData.js'
+import { getFulfillmentActions, updateOrderFields } from '../services/orders.js'
+import { useOrderRefresh } from '../services/useOrderRefresh.js'
 import './Orders.css'
 
 const PAGE_SIZE = 7
@@ -233,10 +237,17 @@ function Orders() {
     useRef('')
 
   const [orders, setOrders] = useState([])
+  const [staffRole, setStaffRole] = useState('')
+  useEffect(() => {
+    let active = true
+    getCurrentStaff().then((staff) => { if (active) setStaffRole(staff?.role || '') }).catch(() => { if (active) setStaffRole('') })
+    return () => { active = false }
+  }, [])
 
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
 
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
@@ -278,18 +289,6 @@ function Orders() {
     return fallback
   }
 
-  const getExistingKey = (object, keys) => {
-    if (!object) return null
-
-    for (const key of keys) {
-      if (Object.prototype.hasOwnProperty.call(object, key)) {
-        return key
-      }
-    }
-
-    return null
-  }
-
   const toNumber = (value) => {
     const number = Number(value)
 
@@ -325,9 +324,7 @@ function Orders() {
       const {
         data,
         error: orderError,
-      } = await supabase
-        .from('orders')
-        .select('*')
+      } = await readAllRows(supabase, 'orders')
 
       if (orderError) {
         throw orderError
@@ -336,6 +333,7 @@ function Orders() {
       setOrders(
         data || []
       )
+      return true
     } catch (loadError) {
       console.error(
         'Orders load error:',
@@ -345,6 +343,7 @@ function Orders() {
       setError(
         'Orders could not be loaded. Please check your Supabase connection.'
       )
+      return false
     } finally {
       setLoading(false)
       setRefreshing(false)
@@ -354,6 +353,8 @@ function Orders() {
   useEffect(() => {
     loadOrders()
   }, [])
+
+  useOrderRefresh('luckyhub-orders-refresh', () => loadOrders(true))
 
   /* =========================================
      ORDER HELPERS
@@ -1344,59 +1345,33 @@ function Orders() {
   }
 
   const updateOrder = async (order, changes) => {
-    if (!order) return
-
-    const idKey = getExistingKey(
-      order,
-      ['id', 'order_id', 'order_number', 'order_no', 'reference']
-    )
-
-    if (!idKey) {
-      window.alert('Order ID column could not be detected.')
-      return
-    }
-
+    if (!order || orderActionLoading) return
     setOrderActionLoading(true)
-
+    setError('')
+    setSuccess('')
     try {
-      const { error: updateError } = await supabase
-        .from('orders')
-        .update(changes)
-        .eq(idKey, order[idKey])
-
-      if (updateError) throw updateError
-
-      await loadOrders(true)
+      const updated = await updateOrderFields(supabase, order, changes)
+      setOrders((current) => current.map((item) => item.id === order.id ? { ...item, ...updated } : item))
       setSelectedOrder(null)
       setOrderModalMode(null)
+      setSuccess(`Order ${getOrderId(order)} updated to ${Object.values(changes)[0]}.`)
+      await loadOrders(true)
+      window.dispatchEvent(new Event('luckyhub:orders-updated'))
     } catch (actionError) {
       console.error('Order action error:', actionError)
-      window.alert(actionError?.message || 'Order could not be updated.')
+      setError(actionError.message || 'Order could not be updated.')
+      window.alert(actionError.message || 'Order could not be updated.')
     } finally {
       setOrderActionLoading(false)
     }
   }
 
   const changeOrderStatus = async (order, nextStatus) => {
-    const statusKey = getExistingKey(order, ['status', 'order_status'])
-
-    if (!statusKey) {
-      window.alert('Order status column could not be detected.')
-      return
-    }
-
-    await updateOrder(order, { [statusKey]: nextStatus })
+    await updateOrder(order, { status: nextStatus })
   }
 
   const markOrderPaid = async (order) => {
-    const paymentKey = getExistingKey(order, ['payment_status', 'paymentStatus'])
-
-    if (!paymentKey) {
-      window.alert('This orders table does not have a payment status column.')
-      return
-    }
-
-    await updateOrder(order, { [paymentKey]: 'paid' })
+    await updateOrder(order, { payment_status: 'Paid' })
   }
 
   /* =========================================
@@ -2044,10 +2019,12 @@ function Orders() {
       </div>
 
 
+      {success && <div role="status" style={{ color: '#00796b', padding: '12px 0' }}>{success}</div>}
+
       {/* ERROR */}
 
       {error && (
-        <div className="orders-error">
+        <div className="orders-error" role="alert">
           {error}
         </div>
       )}
@@ -3192,24 +3169,17 @@ function Orders() {
             <div style={actionUi.footer}>
               {orderModalMode === 'actions' && (
                 <>
-                  <button type="button" style={actionUi.button} disabled={orderActionLoading} onClick={() => changeOrderStatus(selectedOrder, 'processing')}>
-                    Mark Processing
-                  </button>
-                  <button type="button" style={actionUi.button} disabled={orderActionLoading} onClick={() => changeOrderStatus(selectedOrder, 'shipped')}>
-                    Mark Shipped
-                  </button>
-                  <button type="button" style={actionUi.primary} disabled={orderActionLoading} onClick={() => changeOrderStatus(selectedOrder, 'completed')}>
-                    Mark Completed
-                  </button>
-                  <button type="button" style={actionUi.button} disabled={orderActionLoading} onClick={() => markOrderPaid(selectedOrder)}>
+                  {getFulfillmentActions(selectedOrder.status, staffRole).map((status) => (
+                    <button key={status} type="button" style={status === 'Cancelled' ? actionUi.danger : actionUi.primary}
+                      disabled={orderActionLoading} onClick={() => {
+                        if (status !== 'Cancelled' || window.confirm(`Cancel ${getOrderId(selectedOrder)}?`)) changeOrderStatus(selectedOrder, status)
+                      }}>
+                      {status === 'Cancelled' ? 'Cancel Order' : `Mark ${status}`}
+                    </button>
+                  ))}
+                  {!staffRole && <span role="status">Staff access could not be verified. Refresh before changing fulfillment.</span>}
+                  <button type="button" style={actionUi.button} disabled={orderActionLoading || !staffRole || selectedOrder.payment_status === 'Paid'} onClick={() => markOrderPaid(selectedOrder)}>
                     Mark Paid
-                  </button>
-                  <button type="button" style={actionUi.danger} disabled={orderActionLoading} onClick={() => {
-                    if (window.confirm(`Cancel ${getOrderId(selectedOrder)}?`)) {
-                      changeOrderStatus(selectedOrder, 'cancelled')
-                    }
-                  }}>
-                    Cancel Order
                   </button>
                 </>
               )}

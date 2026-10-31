@@ -1,3 +1,4 @@
+import { validateProductForm, updateSingleRow, deleteSingleRow, readAllRows } from '../services/adminData.js'
 import {
   AlertTriangle,
   Box,
@@ -10,6 +11,7 @@ import {
   Edit3,
   Eye,
   Grid2X2,
+  ImagePlus,
   List,
   MoreVertical,
   Package,
@@ -34,17 +36,22 @@ import './Products.css'
 
 const PAGE_SIZE = 6
 const TIME_ZONE = 'Asia/Colombo'
+const PRODUCT_IMAGE_BUCKET = 'product-images'
+const MAX_PRODUCT_IMAGE_SIZE = 5 * 1024 * 1024
+const MAX_PRODUCT_IMAGES = 5
 
 const FALLBACK_PRODUCT = {
   name: '',
   sku: '',
   description: '',
-  price: 0,
+  base_price: 0,
+  compare_at_price: null,
   stock_quantity: 0,
-  low_stock_threshold: 5,
+  alert_quantity: 5,
   category_id: null,
   image_url: null,
   is_active: true,
+  slug: '',
 }
 
 function Products() {
@@ -70,12 +77,17 @@ function Products() {
   const [editingProduct, setEditingProduct] = useState(null)
   const [saving, setSaving] = useState(false)
 
+  const [galleryImages, setGalleryImages] = useState([])
+  const [removedGalleryImages, setRemovedGalleryImages] = useState([])
+  const [galleryLoading, setGalleryLoading] = useState(false)
+
   const [productForm, setProductForm] = useState({
     name: '',
     sku: '',
     description: '',
     categoryId: '',
     price: 0,
+    comparePrice: '',
     stock: 0,
     threshold: 5,
     imageUrl: '',
@@ -180,13 +192,9 @@ function Products() {
         productResult,
         categoryResult,
       ] = await Promise.all([
-        supabase
-          .from('products')
-          .select('*'),
+        readAllRows(supabase, 'products'),
 
-        supabase
-          .from('categories')
-          .select('*'),
+        readAllRows(supabase, 'categories'),
       ])
 
       if (productResult.error) {
@@ -391,6 +399,7 @@ function Products() {
       getValue(
         product,
         [
+          'base_price',
           'price',
           'selling_price',
           'unit_price',
@@ -398,6 +407,58 @@ function Products() {
         ],
         0
       )
+    )
+  }
+
+  const getCompareAtPrice = (
+    product
+  ) => {
+    const value = getValue(
+      product,
+      [
+        'compare_at_price',
+      ],
+      null
+    )
+
+    if (
+      value === null ||
+      value === undefined ||
+      value === ''
+    ) {
+      return null
+    }
+
+    const number = Number(value)
+
+    return Number.isFinite(number)
+      ? number
+      : null
+  }
+
+  const getDiscountPercent = (
+    product
+  ) => {
+    const sellingPrice =
+      getPrice(product)
+
+    const originalPrice =
+      getCompareAtPrice(product)
+
+    if (
+      originalPrice === null ||
+      originalPrice <= sellingPrice ||
+      originalPrice <= 0
+    ) {
+      return 0
+    }
+
+    return Math.round(
+      (
+        (originalPrice - sellingPrice) /
+        originalPrice
+      ) *
+        100
     )
   }
 
@@ -426,6 +487,7 @@ function Products() {
       getValue(
         product,
         [
+          'alert_quantity',
           'low_stock_threshold',
           'reorder_level',
           'minimum_stock',
@@ -607,6 +669,572 @@ function Products() {
       total % tones.length
     ]
   }
+
+  /* =========================================
+     PRODUCT IMAGE GALLERY + STORAGE
+  ========================================= */
+
+  const makeGalleryKey = () => {
+    if (
+      globalThis.crypto
+        ?.randomUUID
+    ) {
+      return globalThis.crypto.randomUUID()
+    }
+
+    return `${Date.now()}-${Math.random()
+      .toString(36)
+      .slice(2)}`
+  }
+
+  const getGalleryImageSrc = (
+    image
+  ) => {
+    return (
+      image?.previewUrl ||
+      image?.imageUrl ||
+      ''
+    )
+  }
+
+  const revokeLocalGalleryPreviews = (
+    images = galleryImages
+  ) => {
+    images.forEach((image) => {
+      if (
+        image?.previewUrl &&
+        String(
+          image.previewUrl
+        ).startsWith('blob:')
+      ) {
+        URL.revokeObjectURL(
+          image.previewUrl
+        )
+      }
+    })
+  }
+
+  const uploadProductImage = async (
+    file,
+    productName
+  ) => {
+    const originalExtension =
+      String(file.name || '')
+        .split('.')
+        .pop()
+        ?.toLowerCase()
+
+    const extension =
+      originalExtension &&
+      /^[a-z0-9]+$/.test(
+        originalExtension
+      )
+        ? originalExtension
+        : 'jpg'
+
+    const productFolder =
+      createSlug(productName) ||
+      'product'
+
+    const uniqueId =
+      globalThis.crypto
+        ?.randomUUID
+        ? globalThis.crypto.randomUUID()
+        : `${Date.now()}-${Math.random()
+            .toString(36)
+            .slice(2)}`
+
+    const storagePath =
+      `${productFolder}/${uniqueId}.${extension}`
+
+    const {
+      error: uploadError,
+    } = await supabase.storage
+      .from(
+        PRODUCT_IMAGE_BUCKET
+      )
+      .upload(
+        storagePath,
+        file,
+        {
+          cacheControl: '3600',
+          upsert: false,
+          contentType:
+            file.type ||
+            undefined,
+        }
+      )
+
+    if (uploadError) {
+      throw uploadError
+    }
+
+    const {
+      data: publicUrlData,
+    } = supabase.storage
+      .from(
+        PRODUCT_IMAGE_BUCKET
+      )
+      .getPublicUrl(
+        storagePath
+      )
+
+    const publicUrl =
+      publicUrlData?.publicUrl
+
+    if (!publicUrl) {
+      await supabase.storage
+        .from(
+          PRODUCT_IMAGE_BUCKET
+        )
+        .remove([
+          storagePath,
+        ])
+
+      throw new Error(
+        'Product image public URL could not be generated.'
+      )
+    }
+
+    return {
+      publicUrl,
+      storagePath,
+    }
+  }
+
+  const getProductImageStoragePath = (
+    imageUrl
+  ) => {
+    if (!imageUrl) {
+      return null
+    }
+
+    const marker =
+      `/storage/v1/object/public/${PRODUCT_IMAGE_BUCKET}/`
+
+    const markerIndex =
+      String(imageUrl).indexOf(
+        marker
+      )
+
+    if (markerIndex === -1) {
+      return null
+    }
+
+    const encodedPath =
+      String(imageUrl).slice(
+        markerIndex +
+          marker.length
+      )
+
+    try {
+      return decodeURIComponent(
+        encodedPath
+      )
+    } catch {
+      return encodedPath
+    }
+  }
+
+  const deleteStoredProductImage = async (
+    imageUrl
+  ) => {
+    const storagePath =
+      getProductImageStoragePath(
+        imageUrl
+      )
+
+    if (!storagePath) {
+      return
+    }
+
+    const {
+      error: removeError,
+    } = await supabase.storage
+      .from(
+        PRODUCT_IMAGE_BUCKET
+      )
+      .remove([
+        storagePath,
+      ])
+
+    if (removeError) {
+      console.warn(
+        'Product image could not be removed from Storage:',
+        removeError
+      )
+    }
+  }
+
+  const loadProductGallery = async (
+    productId,
+    fallbackImageUrl = ''
+  ) => {
+    const {
+      data,
+      error: galleryError,
+    } = await supabase
+      .from('product_images')
+      .select(
+        'id, product_id, image_url, storage_path, sort_order, is_primary'
+      )
+      .eq(
+        'product_id',
+        productId
+      )
+      .order(
+        'sort_order',
+        {
+          ascending: true,
+        }
+      )
+
+    if (galleryError) {
+      throw galleryError
+    }
+
+    const rows =
+      (data || []).map(
+        (row) => ({
+          key:
+            `db-${row.id}`,
+          id:
+            row.id,
+          imageUrl:
+            row.image_url,
+          storagePath:
+            row.storage_path ||
+            getProductImageStoragePath(
+              row.image_url
+            ),
+          previewUrl:
+            row.image_url,
+          file:
+            null,
+          isPrimary:
+            Boolean(
+              row.is_primary
+            ),
+          persisted:
+            true,
+        })
+      )
+
+    if (
+      rows.length === 0 &&
+      fallbackImageUrl
+    ) {
+      return [
+        {
+          key:
+            `legacy-${productId}`,
+          id:
+            null,
+          imageUrl:
+            fallbackImageUrl,
+          storagePath:
+            getProductImageStoragePath(
+              fallbackImageUrl
+            ),
+          previewUrl:
+            fallbackImageUrl,
+          file:
+            null,
+          isPrimary:
+            true,
+          persisted:
+            false,
+        },
+      ]
+    }
+
+    if (
+      rows.length > 0 &&
+      !rows.some(
+        (image) =>
+          image.isPrimary
+      )
+    ) {
+      rows[0].isPrimary = true
+    }
+
+    return rows
+  }
+
+  const handleProductImagesChange = (
+    event
+  ) => {
+    const selectedFiles =
+      Array.from(
+        event.target.files || []
+      )
+
+    if (
+      selectedFiles.length === 0
+    ) {
+      return
+    }
+
+    const remainingSlots =
+      Math.max(
+        0,
+        MAX_PRODUCT_IMAGES -
+          galleryImages.length
+      )
+
+    if (
+      remainingSlots === 0
+    ) {
+      window.alert(
+        `Maximum ${MAX_PRODUCT_IMAGES} product images are allowed.`
+      )
+
+      event.target.value = ''
+      return
+    }
+
+    const acceptedTypes = [
+      'image/jpeg',
+      'image/png',
+      'image/webp',
+    ]
+
+    const validFiles = []
+    const rejectedFiles = []
+
+    selectedFiles.forEach(
+      (file) => {
+        if (
+          !acceptedTypes.includes(
+            file.type
+          )
+        ) {
+          rejectedFiles.push(
+            `${file.name}: unsupported format`
+          )
+          return
+        }
+
+        if (
+          file.size >
+          MAX_PRODUCT_IMAGE_SIZE
+        ) {
+          rejectedFiles.push(
+            `${file.name}: larger than 5 MB`
+          )
+          return
+        }
+
+        validFiles.push(file)
+      }
+    )
+
+    if (
+      rejectedFiles.length > 0
+    ) {
+      window.alert(
+        `Some images were skipped:\n\n${rejectedFiles.join(
+          '\n'
+        )}`
+      )
+    }
+
+    const filesToAdd =
+      validFiles.slice(
+        0,
+        remainingSlots
+      )
+
+    if (
+      validFiles.length >
+      remainingSlots
+    ) {
+      window.alert(
+        `Only ${remainingSlots} more image${
+          remainingSlots === 1
+            ? ''
+            : 's'
+        } can be added. Maximum is ${MAX_PRODUCT_IMAGES}.`
+      )
+    }
+
+    if (
+      filesToAdd.length > 0
+    ) {
+      setGalleryImages(
+        (current) => {
+          const hasPrimary =
+            current.some(
+              (image) =>
+                image.isPrimary
+            )
+
+          const additions =
+            filesToAdd.map(
+              (
+                file,
+                index
+              ) => ({
+                key:
+                  `new-${makeGalleryKey()}`,
+                id:
+                  null,
+                imageUrl:
+                  '',
+                storagePath:
+                  null,
+                previewUrl:
+                  URL.createObjectURL(
+                    file
+                  ),
+                file,
+                isPrimary:
+                  !hasPrimary &&
+                  index === 0,
+                persisted:
+                  false,
+              })
+            )
+
+          return [
+            ...current,
+            ...additions,
+          ]
+        }
+      )
+    }
+
+    event.target.value = ''
+  }
+
+  const setPrimaryGalleryImage = (
+    key
+  ) => {
+    setGalleryImages(
+      (current) =>
+        current.map(
+          (image) => ({
+            ...image,
+            isPrimary:
+              image.key === key,
+          })
+        )
+    )
+  }
+
+  const moveGalleryImage = (
+    index,
+    direction
+  ) => {
+    setGalleryImages(
+      (current) => {
+        const next =
+          [...current]
+
+        const targetIndex =
+          index + direction
+
+        if (
+          targetIndex < 0 ||
+          targetIndex >=
+            next.length
+        ) {
+          return current
+        }
+
+        const [
+          movedImage,
+        ] = next.splice(
+          index,
+          1
+        )
+
+        next.splice(
+          targetIndex,
+          0,
+          movedImage
+        )
+
+        return next
+      }
+    )
+  }
+
+  const removeGalleryImage = (
+    key
+  ) => {
+    const target =
+      galleryImages.find(
+        (image) =>
+          image.key === key
+      )
+
+    if (!target) {
+      return
+    }
+
+    if (
+      target.previewUrl &&
+      String(
+        target.previewUrl
+      ).startsWith('blob:')
+    ) {
+      URL.revokeObjectURL(
+        target.previewUrl
+      )
+    }
+
+    if (
+      target.id ||
+      target.imageUrl
+    ) {
+      setRemovedGalleryImages(
+        (current) => [
+          ...current,
+          target,
+        ]
+      )
+    }
+
+    setGalleryImages(
+      (current) => {
+        const next =
+          current.filter(
+            (image) =>
+              image.key !== key
+          )
+
+        if (
+          target.isPrimary &&
+          next.length > 0
+        ) {
+          return next.map(
+            (
+              image,
+              index
+            ) => ({
+              ...image,
+              isPrimary:
+                index === 0,
+            })
+          )
+        }
+
+        return next
+      }
+    )
+  }
+
+  const closeProductFormModal =
+    () => {
+      revokeLocalGalleryPreviews()
+
+      setGalleryImages([])
+      setRemovedGalleryImages([])
+      setGalleryLoading(false)
+      setEditingProduct(null)
+      setFormModalOpen(false)
+    }
 
   /* =========================================
      SUMMARY
@@ -899,7 +1527,12 @@ function Products() {
   ========================================= */
 
   const openAddProduct = () => {
+    revokeLocalGalleryPreviews()
+
     setEditingProduct(null)
+    setGalleryImages([])
+    setRemovedGalleryImages([])
+    setGalleryLoading(false)
 
     setProductForm({
       name: '',
@@ -907,6 +1540,7 @@ function Products() {
       description: '',
       categoryId: '',
       price: 0,
+      comparePrice: '',
       stock: 0,
       threshold: 5,
       imageUrl: '',
@@ -920,14 +1554,26 @@ function Products() {
      EDIT
   ========================================= */
 
-  const openEditProduct = (
+  const openEditProduct = async (
     product
   ) => {
     setMenuProduct(null)
 
+    revokeLocalGalleryPreviews()
+
+    const existingImage =
+      getImage(product) || ''
+
+    const productId =
+      getProductId(product)
+
     setEditingProduct(
       product
     )
+
+    setGalleryImages([])
+    setRemovedGalleryImages([])
+    setGalleryLoading(true)
 
     setProductForm({
       name:
@@ -954,6 +1600,11 @@ function Products() {
       price:
         getPrice(product),
 
+      comparePrice:
+        getCompareAtPrice(
+          product
+        ) ?? '',
+
       stock:
         getStock(product),
 
@@ -963,8 +1614,7 @@ function Products() {
         ),
 
       imageUrl:
-        getImage(product) ||
-        '',
+        existingImage,
 
       active:
         getActiveState(
@@ -973,6 +1623,61 @@ function Products() {
     })
 
     setFormModalOpen(true)
+
+    try {
+      if (!productId) {
+        throw new Error(
+          'Product ID could not be detected.'
+        )
+      }
+
+      const images =
+        await loadProductGallery(
+          productId,
+          existingImage
+        )
+
+      setGalleryImages(
+        images
+      )
+    } catch (galleryError) {
+      console.error(
+        'Product gallery load error:',
+        galleryError
+      )
+
+      if (existingImage) {
+        setGalleryImages([
+          {
+            key:
+              `fallback-${productId || makeGalleryKey()}`,
+            id:
+              null,
+            imageUrl:
+              existingImage,
+            storagePath:
+              getProductImageStoragePath(
+                existingImage
+              ),
+            previewUrl:
+              existingImage,
+            file:
+              null,
+            isPrimary:
+              true,
+            persisted:
+              false,
+          },
+        ])
+      }
+
+      window.alert(
+        galleryError?.message ||
+        'Product gallery could not be loaded.'
+      )
+    } finally {
+      setGalleryLoading(false)
+    }
   }
 
   /* =========================================
@@ -983,6 +1688,8 @@ function Products() {
     event
   ) => {
     event.preventDefault()
+    if (saving) return
+    try { validateProductForm(productForm) } catch (validationError) { window.alert(validationError.message); return }
 
     if (
       !productForm.name.trim()
@@ -994,7 +1701,59 @@ function Products() {
       return
     }
 
+    if (
+      galleryImages.length >
+      MAX_PRODUCT_IMAGES
+    ) {
+      window.alert(
+        `Maximum ${MAX_PRODUCT_IMAGES} product images are allowed.`
+      )
+
+      return
+    }
+
+    const sellingPrice =
+      Number(productForm.price) || 0
+
+    const comparePrice =
+      productForm.comparePrice === '' ||
+      productForm.comparePrice === null ||
+      productForm.comparePrice === undefined
+        ? null
+        : Number(
+            productForm.comparePrice
+          )
+
+    if (
+      comparePrice !== null &&
+      (
+        !Number.isFinite(comparePrice) ||
+        comparePrice < 0
+      )
+    ) {
+      window.alert(
+        'Enter a valid original price.'
+      )
+
+      return
+    }
+
+    if (
+      comparePrice !== null &&
+      comparePrice > 0 &&
+      comparePrice <= sellingPrice
+    ) {
+      window.alert(
+        'Original price must be higher than the selling price to apply a discount.'
+      )
+
+      return
+    }
+
     setSaving(true)
+
+    const newlyUploadedPaths = []
+    let galleryWriteAttempted = false
 
     try {
       const schemaSource =
@@ -1038,12 +1797,16 @@ function Products() {
         getExistingKey(
           schemaSource,
           [
+            'base_price',
             'price',
             'selling_price',
             'unit_price',
             'sale_price',
           ]
         )
+
+      const comparePriceKey =
+        'compare_at_price'
 
       const stockKey =
         getExistingKey(
@@ -1061,6 +1824,7 @@ function Products() {
         getExistingKey(
           schemaSource,
           [
+            'alert_quantity',
             'low_stock_threshold',
             'reorder_level',
             'minimum_stock',
@@ -1078,17 +1842,7 @@ function Products() {
         )
 
       const imageKey =
-        getExistingKey(
-          schemaSource,
-          [
-            'image_url',
-            'image',
-            'thumbnail_url',
-            'thumbnail',
-            'product_image',
-            'photo_url',
-          ]
-        )
+        'image_url'
 
       const activeKey =
         getExistingKey(
@@ -1131,6 +1885,12 @@ function Products() {
           ) || 0
       }
 
+      payload[comparePriceKey] =
+        comparePrice &&
+        comparePrice > 0
+          ? comparePrice
+          : null
+
       if (stockKey) {
         payload[stockKey] =
           Number(
@@ -1151,11 +1911,23 @@ function Products() {
           null
       }
 
-      if (imageKey) {
-        payload[imageKey] =
-          productForm.imageUrl.trim() ||
-          null
-      }
+      payload[imageKey] =
+        editingProduct
+          ? getImage(
+              editingProduct
+            ) || null
+          : (
+              galleryImages.find(
+                (image) =>
+                  image.isPrimary &&
+                  image.imageUrl
+              )?.imageUrl ||
+              galleryImages.find(
+                (image) =>
+                  image.imageUrl
+              )?.imageUrl ||
+              null
+            )
 
       if (activeKey) {
         payload[activeKey] =
@@ -1179,6 +1951,8 @@ function Products() {
           )
       }
 
+      let savedProductId = null
+
       if (
         editingProduct
       ) {
@@ -1198,8 +1972,8 @@ function Products() {
         }
 
         const {
-          error:
-            updateError,
+          data: updatedProduct,
+          error: updateError,
         } = await supabase
           .from('products')
           .update(payload)
@@ -1209,35 +1983,360 @@ function Products() {
               idKey
             ]
           )
+          .select('id')
+          .maybeSingle()
 
         if (updateError) {
           throw updateError
         }
+
+        if (!updatedProduct) {
+          throw new Error(
+            'Product update did not modify a row. Check the products UPDATE RLS policy for this staff account.'
+          )
+        }
+
+        savedProductId =
+          updatedProduct.id
       } else {
         const {
-          error:
-            insertError,
+          data: insertedProduct,
+          error: insertError,
         } = await supabase
           .from('products')
           .insert([
             payload,
           ])
+          .select('id')
+          .maybeSingle()
 
         if (insertError) {
           throw insertError
         }
+
+        if (!insertedProduct) {
+          throw new Error(
+            'Product insert did not return a row. Check the products INSERT/SELECT RLS policies for this staff account.'
+          )
+        }
+
+        savedProductId =
+          insertedProduct.id
       }
 
-      setFormModalOpen(
-        false
-      )
+      if (!savedProductId) {
+        throw new Error(
+          'Saved product ID is missing.'
+        )
+      }
 
-      setEditingProduct(
+      const finalizedGallery = []
+
+      for (
+        let index = 0;
+        index <
+        galleryImages.length;
+        index += 1
+      ) {
+        const image =
+          galleryImages[index]
+
+        if (image.file) {
+          const uploaded =
+            await uploadProductImage(
+              image.file,
+              productForm.name
+            )
+
+          newlyUploadedPaths.push(
+            uploaded.storagePath
+          )
+
+          finalizedGallery.push({
+            ...image,
+            imageUrl:
+              uploaded.publicUrl,
+            storagePath:
+              uploaded.storagePath,
+            previewUrl:
+              uploaded.publicUrl,
+            file:
+              null,
+          })
+        } else if (
+          image.imageUrl
+        ) {
+          finalizedGallery.push({
+            ...image,
+            storagePath:
+              image.storagePath ||
+              getProductImageStoragePath(
+                image.imageUrl
+              ),
+          })
+        }
+      }
+
+      if (
+        finalizedGallery.length >
+        0 &&
+        !finalizedGallery.some(
+          (image) =>
+            image.isPrimary
+        )
+      ) {
+        finalizedGallery[0] = {
+          ...finalizedGallery[0],
+          isPrimary:
+            true,
+        }
+      }
+
+      const {
+        error: clearPrimaryError,
+      } = await supabase
+        .from('product_images')
+        .update({
+          is_primary:
+            false,
+        })
+        .eq(
+          'product_id',
+          savedProductId
+        )
+
+      if (clearPrimaryError) {
+        throw clearPrimaryError
+      }
+
+      const removedIds =
+        removedGalleryImages
+          .map(
+            (image) =>
+              image.id
+          )
+          .filter(Boolean)
+
+      if (
+        removedIds.length > 0
+      ) {
+        const {
+          error: deleteRowsError,
+        } = await supabase
+          .from('product_images')
+          .delete()
+          .in(
+            'id',
+            removedIds
+          )
+
+        if (deleteRowsError) {
+          throw deleteRowsError
+        }
+      }
+
+      for (
+        let index = 0;
+        index <
+        finalizedGallery.length;
+        index += 1
+      ) {
+        const image =
+          finalizedGallery[index]
+
+        if (!image.id) {
+          continue
+        }
+
+        const {
+          error: updateImageError,
+        } = await supabase
+          .from('product_images')
+          .update({
+            image_url:
+              image.imageUrl,
+            storage_path:
+              image.storagePath ||
+              null,
+            sort_order:
+              index,
+            is_primary:
+              Boolean(
+                image.isPrimary
+              ),
+          })
+          .eq(
+            'id',
+            image.id
+          )
+          .eq(
+            'product_id',
+            savedProductId
+          )
+
+        if (updateImageError) {
+          throw updateImageError
+        }
+      }
+
+      const newRows =
+        finalizedGallery
+          .map(
+            (
+              image,
+              index
+            ) => ({
+              image,
+              index,
+            })
+          )
+          .filter(
+            ({ image }) =>
+              !image.id
+          )
+          .map(
+            ({
+              image,
+              index,
+            }) => ({
+              product_id:
+                savedProductId,
+              image_url:
+                image.imageUrl,
+              storage_path:
+                image.storagePath ||
+                null,
+              sort_order:
+                index,
+              is_primary:
+                Boolean(
+                  image.isPrimary
+                ),
+            })
+          )
+
+      if (
+        newRows.length > 0
+      ) {
+        galleryWriteAttempted = true
+        const {
+          error: insertImagesError,
+        } = await supabase
+          .from('product_images')
+          .insert(
+            newRows
+          )
+
+        if (insertImagesError) {
+          throw insertImagesError
+        }
+      }
+
+      const primaryImage =
+        finalizedGallery.find(
+          (image) =>
+            image.isPrimary
+        ) ||
+        finalizedGallery[0] ||
         null
-      )
+
+      const finalPrimaryUrl =
+        primaryImage?.imageUrl ||
+        null
+
+      const {
+        data: finalProduct,
+        error: finalProductError,
+      } = await supabase
+        .from('products')
+        .update({
+          image_url:
+            finalPrimaryUrl,
+        })
+        .eq(
+          'id',
+          savedProductId
+        )
+        .select(
+          'id, image_url'
+        )
+        .maybeSingle()
+
+      if (finalProductError) {
+        throw finalProductError
+      }
+
+      if (!finalProduct) {
+        throw new Error(
+          'Main product image could not be updated.'
+        )
+      }
+
+      if (
+        (finalProduct.image_url || null) !==
+        (finalPrimaryUrl || null)
+      ) {
+        throw new Error(
+          'The selected main image was not saved to products.image_url.'
+        )
+      }
+
+      const retainedUrls =
+        new Set(
+          finalizedGallery.map(
+            (image) =>
+              image.imageUrl
+          )
+        )
+
+      for (
+        const removedImage
+        of removedGalleryImages
+      ) {
+        if (
+          removedImage.imageUrl &&
+          !retainedUrls.has(
+            removedImage.imageUrl
+          )
+        ) {
+          await deleteStoredProductImage(
+            removedImage.imageUrl
+          )
+        }
+      }
+
+      revokeLocalGalleryPreviews()
+
+      setFormModalOpen(false)
+      setEditingProduct(null)
+      setGalleryImages([])
+      setRemovedGalleryImages([])
+      setGalleryLoading(false)
 
       await loadData(true)
     } catch (saveError) {
+      if (
+        newlyUploadedPaths.length >
+        0 && !galleryWriteAttempted
+      ) {
+        const {
+          error: cleanupError,
+        } = await supabase.storage
+          .from(
+            PRODUCT_IMAGE_BUCKET
+          )
+          .remove(
+            newlyUploadedPaths
+          )
+
+        if (cleanupError) {
+          console.warn(
+            'New product image cleanup failed:',
+            cleanupError
+          )
+        }
+      }
+
       console.error(
         'Product save error:',
         saveError
@@ -1299,11 +2398,12 @@ function Products() {
       return
     }
 
+    if (String(stockValue).trim() === '') { window.alert('Stock quantity is required.'); return }
     const quantity =
       Number(stockValue)
 
     if (
-      !Number.isFinite(
+      !Number.isSafeInteger(
         quantity
       ) ||
       quantity < 0
@@ -1349,25 +2449,7 @@ function Products() {
         )
       }
 
-      const {
-        error:
-          updateError,
-      } = await supabase
-        .from('products')
-        .update({
-          [stockKey]:
-            quantity,
-        })
-        .eq(
-          idKey,
-          stockProduct[
-            idKey
-          ]
-        )
-
-      if (updateError) {
-        throw updateError
-      }
+      await updateSingleRow(supabase, 'products', stockProduct, { [stockKey]: quantity }, idKey, { [stockKey]: stockProduct[stockKey] })
 
       setStockModalOpen(
         false
@@ -1442,23 +2524,7 @@ function Products() {
           ]
         )
 
-      const {
-        error:
-          updateError,
-      } = await supabase
-        .from('products')
-        .update({
-          [activeKey]:
-            newStatus,
-        })
-        .eq(
-          idKey,
-          product[idKey]
-        )
-
-      if (updateError) {
-        throw updateError
-      }
+      await updateSingleRow(supabase, 'products', product, { [activeKey]: newStatus }, idKey, { [activeKey]: product[activeKey] })
 
       await loadData(true)
     } catch (statusError) {
@@ -1510,19 +2576,61 @@ function Products() {
         )
       }
 
+      const productId =
+        product[idKey]
+
+      let galleryUrls = []
+
       const {
-        error:
-          deleteError,
+        data: galleryRows,
+        error: galleryLoadError,
       } = await supabase
-        .from('products')
-        .delete()
+        .from('product_images')
+        .select(
+          'image_url'
+        )
         .eq(
-          idKey,
-          product[idKey]
+          'product_id',
+          productId
         )
 
-      if (deleteError) {
-        throw deleteError
+      if (galleryLoadError) {
+        console.warn(
+          'Product gallery could not be loaded before delete:',
+          galleryLoadError
+        )
+      } else {
+        galleryUrls =
+          (galleryRows || [])
+            .map(
+              (row) =>
+                row.image_url
+            )
+            .filter(Boolean)
+      }
+
+      await deleteSingleRow(supabase, 'products', product, idKey)
+
+      const mainImage =
+        getImage(product)
+
+      const storageUrls =
+        Array.from(
+          new Set([
+            ...galleryUrls,
+            ...(mainImage
+              ? [mainImage]
+              : []),
+          ])
+        )
+
+      for (
+        const imageUrl
+        of storageUrls
+      ) {
+        await deleteStoredProductImage(
+          imageUrl
+        )
       }
 
       await loadData(true)
@@ -2833,11 +3941,57 @@ function Products() {
 
                           <td className="product-price">
 
-                            {formatCurrency(
-                              getPrice(
+                            <div
+                              style={{
+                                display: 'grid',
+                                gap: '3px',
+                              }}
+                            >
+                              <strong>
+                                {formatCurrency(
+                                  getPrice(
+                                    product
+                                  )
+                                )}
+                              </strong>
+
+                              {getDiscountPercent(
                                 product
-                              )
-                            )}
+                              ) > 0 && (
+                                <>
+                                  <span
+                                    style={{
+                                      color: '#8a9691',
+                                      fontSize: '11px',
+                                      textDecoration:
+                                        'line-through',
+                                    }}
+                                  >
+                                    {formatCurrency(
+                                      getCompareAtPrice(
+                                        product
+                                      )
+                                    )}
+                                  </span>
+
+                                  <span
+                                    style={{
+                                      width: 'fit-content',
+                                      padding: '2px 6px',
+                                      borderRadius: '999px',
+                                      background: '#e7f7f0',
+                                      color: '#08735f',
+                                      fontSize: '10px',
+                                      fontWeight: 800,
+                                    }}
+                                  >
+                                    {getDiscountPercent(
+                                      product
+                                    )}% OFF
+                                  </span>
+                                </>
+                              )}
+                            </div>
 
                           </td>
 
@@ -3060,13 +4214,63 @@ function Products() {
 
                       <div className="product-grid-bottom">
 
-                        <strong>
-                          {formatCurrency(
-                            getPrice(
-                              product
-                            )
+                        <div
+                          style={{
+                            display: 'grid',
+                            gap: '3px',
+                          }}
+                        >
+                          <strong>
+                            {formatCurrency(
+                              getPrice(
+                                product
+                              )
+                            )}
+                          </strong>
+
+                          {getDiscountPercent(
+                            product
+                          ) > 0 && (
+                            <div
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                flexWrap: 'wrap',
+                              }}
+                            >
+                              <span
+                                style={{
+                                  color: '#8a9691',
+                                  fontSize: '11px',
+                                  textDecoration:
+                                    'line-through',
+                                }}
+                              >
+                                {formatCurrency(
+                                  getCompareAtPrice(
+                                    product
+                                  )
+                                )}
+                              </span>
+
+                              <span
+                                style={{
+                                  padding: '2px 6px',
+                                  borderRadius: '999px',
+                                  background: '#e7f7f0',
+                                  color: '#08735f',
+                                  fontSize: '10px',
+                                  fontWeight: 800,
+                                }}
+                              >
+                                {getDiscountPercent(
+                                  product
+                                )}% OFF
+                              </span>
+                            </div>
                           )}
-                        </strong>
+                        </div>
 
 
                         <span
@@ -3254,10 +4458,8 @@ function Products() {
               <button
                 type="button"
                 className="product-modal-close"
-                onClick={() =>
-                  setFormModalOpen(
-                    false
-                  )
+                onClick={
+                  closeProductFormModal
                 }
               >
                 <X
@@ -3391,7 +4593,7 @@ function Products() {
 
 
                 <ProductFormField
-                  label="Price (LKR)"
+                  label="Selling Price (LKR)"
                 >
                   <input
                     type="number"
@@ -3413,6 +4615,99 @@ function Products() {
                       )
                     }
                   />
+                </ProductFormField>
+
+
+                <ProductFormField
+                  label="Original Price (LKR) - Optional"
+                >
+                  <div
+                    style={{
+                      display: 'grid',
+                      gap: '8px',
+                    }}
+                  >
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      placeholder="Leave empty for no discount"
+                      value={
+                        productForm.comparePrice
+                      }
+                      onChange={(event) =>
+                        setProductForm(
+                          (
+                            current
+                          ) => ({
+                            ...current,
+
+                            comparePrice:
+                              event.target.value,
+                          })
+                        )
+                      }
+                    />
+
+                    {Number(
+                      productForm.comparePrice
+                    ) >
+                      Number(
+                        productForm.price
+                      ) &&
+                      Number(
+                        productForm.comparePrice
+                      ) >
+                        0 && (
+                        <div
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            flexWrap: 'wrap',
+                          }}
+                        >
+                          <span
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              padding: '4px 8px',
+                              borderRadius: '999px',
+                              background: '#e7f7f0',
+                              color: '#08735f',
+                              fontSize: '11px',
+                              fontWeight: 800,
+                            }}
+                          >
+                            {Math.round(
+                              (
+                                (
+                                  Number(
+                                    productForm.comparePrice
+                                  ) -
+                                  Number(
+                                    productForm.price
+                                  )
+                                ) /
+                                Number(
+                                  productForm.comparePrice
+                                )
+                              ) *
+                                100
+                            )}% OFF
+                          </span>
+
+                          <small
+                            style={{
+                              color: '#718078',
+                              fontSize: '11px',
+                            }}
+                          >
+                            Discount is calculated automatically.
+                          </small>
+                        </div>
+                      )}
+                  </div>
                 </ProductFormField>
 
 
@@ -3466,28 +4761,222 @@ function Products() {
                 </ProductFormField>
 
 
-                <ProductFormField
-                  label="Image URL"
-                >
-                  <input
-                    type="text"
-                    value={
-                      productForm.imageUrl
-                    }
-                    onChange={(event) =>
-                      setProductForm(
-                        (
-                          current
-                        ) => ({
-                          ...current,
+                <div className="product-form-field product-form-full">
+                  <label>
+                    Product Images
+                  </label>
 
-                          imageUrl:
-                            event.target.value,
-                        })
-                      )
-                    }
-                  />
-                </ProductFormField>
+                  <div className="product-gallery-editor">
+
+                    <div className="product-gallery-toolbar">
+
+                      <label className="product-gallery-add-button">
+                        <ImagePlus
+                          size={16}
+                        />
+
+                        <span>
+                          Add Images
+                        </span>
+
+                        <input
+                          type="file"
+                          accept="image/png,image/jpeg,image/webp"
+                          multiple
+                          onChange={
+                            handleProductImagesChange
+                          }
+                          disabled={
+                            galleryLoading ||
+                            galleryImages.length >=
+                              MAX_PRODUCT_IMAGES
+                          }
+                        />
+                      </label>
+
+                      <span className="product-gallery-count">
+                        {galleryImages.length}
+                        {' / '}
+                        {MAX_PRODUCT_IMAGES}
+                      </span>
+
+                    </div>
+
+
+                    <small className="product-gallery-help">
+                      Upload up to 5 JPG, PNG or WEBP images. Maximum 5 MB each.
+                      Choose one image as Main. Use the arrow buttons to control
+                      the order shown in the mobile app.
+                    </small>
+
+
+                    {galleryLoading ? (
+
+                      <div className="product-gallery-empty">
+                        Loading product images...
+                      </div>
+
+                    ) : galleryImages.length === 0 ? (
+
+                      <div className="product-gallery-empty">
+                        No product images selected yet.
+                      </div>
+
+                    ) : (
+
+                      <div className="product-gallery-grid">
+
+                        {galleryImages.map(
+                          (
+                            image,
+                            index
+                          ) => {
+
+                            const imageSrc =
+                              getGalleryImageSrc(
+                                image
+                              )
+
+                            return (
+                              <div
+                                key={
+                                  image.key
+                                }
+                                className={`product-gallery-card ${
+                                  image.isPrimary
+                                    ? 'is-primary'
+                                    : ''
+                                }`}
+                              >
+
+                                <div className="product-gallery-image-box">
+
+                                  {imageSrc ? (
+                                    <img
+                                      src={
+                                        imageSrc
+                                      }
+                                      alt={`Product ${index + 1}`}
+                                    />
+                                  ) : (
+                                    <Package
+                                      size={24}
+                                    />
+                                  )}
+
+                                  {image.isPrimary && (
+                                    <span className="product-gallery-primary-badge">
+                                      Main
+                                    </span>
+                                  )}
+
+                                </div>
+
+
+                                <div className="product-gallery-card-info">
+
+                                  <strong>
+                                    {image.file
+                                      ? image.file.name
+                                      : `Image ${index + 1}`}
+                                  </strong>
+
+                                  <span>
+                                    Position {index + 1}
+                                  </span>
+
+                                </div>
+
+
+                                <div className="product-gallery-card-actions">
+
+                                  <button
+                                    type="button"
+                                    className="product-gallery-main-button"
+                                    disabled={
+                                      image.isPrimary
+                                    }
+                                    onClick={() =>
+                                      setPrimaryGalleryImage(
+                                        image.key
+                                      )
+                                    }
+                                  >
+                                    {image.isPrimary
+                                      ? 'Main Image'
+                                      : 'Set Main'}
+                                  </button>
+
+
+                                  <div className="product-gallery-order-actions">
+
+                                    <button
+                                      type="button"
+                                      title="Move left"
+                                      disabled={
+                                        index === 0
+                                      }
+                                      onClick={() =>
+                                        moveGalleryImage(
+                                          index,
+                                          -1
+                                        )
+                                      }
+                                    >
+                                      <ChevronLeft
+                                        size={14}
+                                      />
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      title="Move right"
+                                      disabled={
+                                        index ===
+                                        galleryImages.length -
+                                          1
+                                      }
+                                      onClick={() =>
+                                        moveGalleryImage(
+                                          index,
+                                          1
+                                        )
+                                      }
+                                    >
+                                      <ChevronRight
+                                        size={14}
+                                      />
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      className="product-gallery-remove-button"
+                                      title="Remove image"
+                                      onClick={() =>
+                                        removeGalleryImage(
+                                          image.key
+                                        )
+                                      }
+                                    >
+                                      <Trash2
+                                        size={14}
+                                      />
+                                    </button>
+
+                                  </div>
+
+                                </div>
+
+                              </div>
+                            )
+                          }
+                        )}
+
+                      </div>
+                    )}
+
+                  </div>
+                </div>
 
 
                 <ProductFormField
@@ -3712,7 +5201,7 @@ function Products() {
                 />
 
                 <ProductDetail
-                  label="Price"
+                  label="Selling Price"
                   value={
                     formatCurrency(
                       getPrice(
@@ -3721,6 +5210,30 @@ function Products() {
                     )
                   }
                 />
+
+                {getDiscountPercent(
+                  selectedProduct
+                ) > 0 && (
+                  <>
+                    <ProductDetail
+                      label="Original Price"
+                      value={
+                        formatCurrency(
+                          getCompareAtPrice(
+                            selectedProduct
+                          )
+                        )
+                      }
+                    />
+
+                    <ProductDetail
+                      label="Discount"
+                      value={`${getDiscountPercent(
+                        selectedProduct
+                      )}% OFF`}
+                    />
+                  </>
+                )}
 
                 <ProductDetail
                   label="Stock"

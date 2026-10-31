@@ -1,3 +1,5 @@
+import { customerIdentityMatches, isRevenueOrder, readAllRows } from '../services/adminData.js'
+import { useOrderRefresh } from '../services/useOrderRefresh.js'
 import {
   ChevronDown,
   ChevronLeft,
@@ -145,9 +147,7 @@ function Customers() {
       ] = await Promise.all([
         loadCustomerTable(),
 
-        supabase
-          .from('orders')
-          .select('*'),
+        readAllRows(supabase, 'orders'),
       ])
 
       setCustomers(
@@ -266,6 +266,8 @@ function Customers() {
       null
     )
   }
+
+  useOrderRefresh('luckyhub-customers-order-refresh', () => loadCustomers(true))
 
   /* =========================================
      ORDER HELPERS
@@ -503,6 +505,8 @@ function Customers() {
                     return true
                   }
 
+                  if (id && customer.id) return false
+
                   if (
                     email &&
                     customer.email &&
@@ -564,10 +568,7 @@ function Customers() {
 
           record.orderCount += 1
 
-          record.totalSpent +=
-            getOrderAmount(
-              order
-            )
+          if (isRevenueOrder(order)) record.totalSpent += getOrderAmount(order)
 
           const orderDate =
             getOrderDate(
@@ -1044,89 +1045,10 @@ function Customers() {
       return []
     }
 
-    const customerId =
-      customer.id !== undefined &&
-      customer.id !== null &&
-      customer.id !== ''
-        ? String(customer.id)
-        : ''
-
-    const customerEmail =
-      String(customer.email || '')
-        .trim()
-        .toLowerCase()
-
-    const customerPhone =
-      String(customer.phone || '')
-        .trim()
-
-    const customerName =
-      String(customer.name || '')
-        .trim()
-        .toLowerCase()
-
     return orders
-      .filter((order) => {
-        const orderCustomerId =
-          getOrderCustomerId(order)
-
-        if (
-          customerId &&
-          orderCustomerId !== undefined &&
-          orderCustomerId !== null &&
-          orderCustomerId !== '' &&
-          String(orderCustomerId) ===
-            customerId
-        ) {
-          return true
-        }
-
-        const orderEmail =
-          String(
-            getOrderCustomerEmail(order) ||
-              ''
-          )
-            .trim()
-            .toLowerCase()
-
-        if (
-          customerEmail &&
-          orderEmail &&
-          customerEmail ===
-            orderEmail
-        ) {
-          return true
-        }
-
-        const orderPhone =
-          String(
-            getOrderCustomerPhone(order) ||
-              ''
-          ).trim()
-
-        if (
-          customerPhone &&
-          orderPhone &&
-          customerPhone ===
-            orderPhone
-        ) {
-          return true
-        }
-
-        const orderName =
-          String(
-            getOrderCustomerName(order) ||
-              ''
-          )
-            .trim()
-            .toLowerCase()
-
-        return (
-          customerName &&
-          orderName &&
-          customerName === orderName
-        )
-      })
+      .filter((order) => customerIdentityMatches(customer, {
+        id: getOrderCustomerId(order), email: getOrderCustomerEmail(order), phone: getOrderCustomerPhone(order),
+      }))
       .sort(
         (a, b) =>
           new Date(

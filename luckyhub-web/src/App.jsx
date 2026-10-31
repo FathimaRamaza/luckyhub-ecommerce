@@ -15,6 +15,7 @@ import Orders from './pages/Orders.jsx'
 import PrintingRequests from './pages/PrintingRequests.jsx'
 import Customers from './pages/Customers.jsx'
 import Sales from './pages/Sales.jsx'
+import Promotions from './pages/Promotions.jsx'
 import Reports from './pages/Reports.jsx'
 import Notifications from './pages/Notifications.jsx'
 import Settings from './pages/Settings.jsx'
@@ -113,6 +114,16 @@ function App() {
             <Route
               path="/sales"
               element={<Sales />}
+            />
+
+
+            {/* PROMOTIONS */}
+
+            <Route
+              path="/promotions"
+              element={
+                <Promotions />
+              }
             />
 
 

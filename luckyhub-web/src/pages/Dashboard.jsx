@@ -1,3 +1,5 @@
+import { isRevenueOrder, readAllRows } from '../services/adminData.js'
+import { useOrderRefresh } from '../services/useOrderRefresh.js'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
@@ -146,9 +148,7 @@ function Dashboard() {
 
   const loadTable = async (tableName) => {
     try {
-      const { data, error } = await supabase
-        .from(tableName)
-        .select('*')
+      const { data, error } = await readAllRows(supabase, tableName)
 
       if (error) {
         return {
@@ -245,6 +245,8 @@ function Dashboard() {
     loadDashboard()
   }, [loadDashboard])
 
+  useOrderRefresh('luckyhub-dashboard-orders-refresh', loadDashboard)
+
   /* =========================================
      DASHBOARD DATA
   ========================================= */
@@ -271,6 +273,7 @@ function Dashboard() {
         const threshold = getValue(
           product,
           [
+            'alert_quantity',
             'low_stock_threshold',
             'reorder_level',
             'minimum_stock',
@@ -390,28 +393,7 @@ function Dashboard() {
           orderSriLankaDate.day ===
             sriLankaToday.day
 
-        const status = normalizeStatus(
-          getValue(
-            order,
-            [
-              'status',
-              'order_status',
-            ],
-            ''
-          )
-        )
-
-        const completed = [
-          'completed',
-          'complete',
-          'delivered',
-          'paid',
-        ].includes(status)
-
-        return (
-          sameDate &&
-          completed
-        )
+        return sameDate && isRevenueOrder(order)
       })
       .reduce(
         (total, order) => {

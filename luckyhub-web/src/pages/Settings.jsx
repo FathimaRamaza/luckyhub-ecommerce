@@ -1,3 +1,4 @@
+import { validateSettings } from '../services/adminData.js'
 import {
   Bell,
   Box,
@@ -258,90 +259,30 @@ function Settings() {
   const [saved, setSaved] = useState(false)
   const [loadingSettings, setLoadingSettings] = useState(true)
   const [settingsError, setSettingsError] = useState('')
+  const [settingsLoaded, setSettingsLoaded] = useState(false)
 
   /* =========================================
      LOAD SETTINGS FROM SUPABASE
   ========================================= */
 
   useEffect(() => {
-    loadSettings()
-    loadCurrentUser()
+    let active = true
+    async function load() {
+      try {
+        if (!supabase) throw new Error('Supabase is not configured.')
+        const { data, error } = await supabase.from('app_settings').select('setting_key, setting_value')
+        if (error) throw error
+        if (active) { setSettings(buildSettingsFromRows(data || [])); setSettingsLoaded(true) }
+      } catch (error) {
+        if (active) setSettingsError(error.message || 'Unable to load settings. Reload before saving.')
+      } finally {
+        if (active) setLoadingSettings(false)
+      }
+    }
+    load()
+    if (supabase) supabase.auth.getUser().then(({ data }) => { if (active) setUser(data?.user || null) }).catch(() => {})
+    return () => { active = false }
   }, [])
-
-  const loadSettings = async () => {
-    setLoadingSettings(true)
-    setSettingsError('')
-
-    try {
-      if (!supabase) {
-        throw new Error(
-          'Supabase is not configured.'
-        )
-      }
-
-      const {
-        data,
-        error,
-      } = await supabase
-        .from('app_settings')
-        .select(`
-          setting_key,
-          setting_value
-        `)
-
-      if (error) {
-        throw error
-      }
-
-      setSettings(
-        buildSettingsFromRows(
-          data || []
-        )
-      )
-    } catch (error) {
-      console.error(
-        'Settings load error:',
-        error
-      )
-
-      setSettings(
-        DEFAULT_SETTINGS
-      )
-
-      setSettingsError(
-        error?.message ||
-          'Unable to load settings from Supabase.'
-      )
-    } finally {
-      setLoadingSettings(false)
-    }
-  }
-
-
-  /* =========================================
-     CURRENT ADMIN
-  ========================================= */
-
-  const loadCurrentUser = async () => {
-    try {
-      if (!supabase) {
-        return
-      }
-
-      const {
-        data,
-      } = await supabase.auth.getUser()
-
-      setUser(
-        data?.user || null
-      )
-    } catch (error) {
-      console.error(
-        'Unable to load current user:',
-        error
-      )
-    }
-  }
 
   /* =========================================
      UPDATE SETTING
@@ -369,6 +310,8 @@ function Settings() {
     async (
       settingsToSave
     ) => {
+      if (!settingsLoaded) throw new Error('Settings were not loaded. Reload before saving or resetting.')
+      validateSettings(settingsToSave)
       if (!supabase) {
         throw new Error(
           'Supabase is not configured.'
@@ -381,6 +324,7 @@ function Settings() {
         )
 
       const {
+        data: savedRows,
         error,
       } = await supabase
         .from('app_settings')
@@ -391,13 +335,17 @@ function Settings() {
               'setting_key',
           }
         )
+        .select('setting_key, setting_value')
 
-      if (error) {
-        throw error
+      if (error) { throw error }
+      const returned = new Map((savedRows || []).map((row) => [row.setting_key, row.setting_value]))
+      if (returned.size !== rows.length || rows.some((row) => returned.get(row.setting_key) !== row.setting_value)) {
+        throw new Error('The database did not confirm all settings. Reload and verify before retrying.')
       }
     }
 
   const handleSave = async () => {
+    if (saving || !settingsLoaded) return
     setSaving(true)
     setSaved(false)
     setSettingsError('')
@@ -441,6 +389,7 @@ function Settings() {
   ========================================= */
 
   const handleReset = async () => {
+    if (saving || !settingsLoaded) return
     const confirmed =
       window.confirm(
         'Reset Lucky Hub settings to default values?'
@@ -566,7 +515,7 @@ function Settings() {
             onClick={handleReset}
             disabled={
               saving ||
-              loadingSettings
+              loadingSettings || !settingsLoaded
             }
           >
 
@@ -585,7 +534,7 @@ function Settings() {
             onClick={handleSave}
             disabled={
               saving ||
-              loadingSettings
+              loadingSettings || !settingsLoaded
             }
           >
 
@@ -642,6 +591,7 @@ function Settings() {
           }}
         >
           {settingsError}
+          {!settingsLoaded && <button type="button" onClick={() => window.location.reload()}>Reload settings</button>}
         </div>
       )}
 
@@ -878,9 +828,7 @@ function Settings() {
                     onChange={(event) =>
                       updateSetting(
                         'lowStockThreshold',
-                        Number(
-                          event.target.value
-                        )
+                        event.target.value
                       )
                     }
                   />
@@ -930,7 +878,7 @@ function Settings() {
 
                 <SettingsField
                   label="Standard Delivery Fee (LKR)"
-                  note="This amount is shared with the customer mobile checkout."
+                  note="Saved as standard_delivery_fee. Mobile checkout must read this setting; existing orders keep their recorded fee."
                 >
                   <input
                     type="number"
@@ -942,12 +890,7 @@ function Settings() {
                     onChange={(event) =>
                       updateSetting(
                         'standardDeliveryFee',
-                        Math.max(
-                          0,
-                          Number(
-                            event.target.value
-                          ) || 0
-                        )
+                        event.target.value
                       )
                     }
                   />
@@ -968,12 +911,7 @@ function Settings() {
                     onChange={(event) =>
                       updateSetting(
                         'storePickupFee',
-                        Math.max(
-                          0,
-                          Number(
-                            event.target.value
-                          ) || 0
-                        )
+                        event.target.value
                       )
                     }
                   />

@@ -1,3 +1,4 @@
+import { updateSingleRow, readAllRows } from '../services/adminData.js'
 import {
   AlertTriangle,
   Boxes,
@@ -133,13 +134,9 @@ function Inventory() {
         productResult,
         categoryResult,
       ] = await Promise.all([
-        supabase
-          .from('products')
-          .select('*'),
+        readAllRows(supabase, 'products'),
 
-        supabase
-          .from('categories')
-          .select('*'),
+        readAllRows(supabase, 'categories'),
       ])
 
       if (productResult.error) {
@@ -410,6 +407,7 @@ function Inventory() {
       getValue(
         product,
         [
+          'alert_quantity',
           'low_stock_threshold',
           'reorder_level',
           'minimum_stock',
@@ -850,10 +848,12 @@ function Inventory() {
   ) => {
     event.preventDefault()
 
+    if (savingStock) return
     if (!selectedProduct) {
       return
     }
 
+    if (String(stockValue).trim() === '' || String(minimumStockValue).trim() === '') { window.alert('Stock and minimum quantities are required.'); return }
     const nextStock =
       Number(stockValue)
 
@@ -861,7 +861,7 @@ function Inventory() {
       Number(minimumStockValue)
 
     if (
-      !Number.isFinite(nextStock) ||
+      !Number.isSafeInteger(nextStock) ||
       nextStock < 0
     ) {
       window.alert(
@@ -872,7 +872,7 @@ function Inventory() {
     }
 
     if (
-      !Number.isFinite(
+      !Number.isSafeInteger(
         nextMinimum
       ) ||
       nextMinimum < 0
@@ -909,6 +909,7 @@ function Inventory() {
       getExistingKey(
         selectedProduct,
         [
+          'alert_quantity',
           'low_stock_threshold',
           'reorder_level',
           'minimum_stock',
@@ -954,18 +955,10 @@ function Inventory() {
     setSavingStock(true)
 
     try {
-      const { error: updateError } =
-        await supabase
-          .from('products')
-          .update(payload)
-          .eq(
-            idKey,
-            selectedProduct[idKey]
-          )
-
-      if (updateError) {
-        throw updateError
-      }
+      await updateSingleRow(supabase, 'products', selectedProduct, payload, idKey, {
+        [stockKey]: selectedProduct[stockKey],
+        ...(minimumKey ? { [minimumKey]: selectedProduct[minimumKey] } : {}),
+      })
 
       setStockModalOpen(false)
       setSelectedProduct(null)
